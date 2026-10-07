@@ -151,7 +151,7 @@
       <div class="intro-text" class:show={landed}>
         <h1>{one} takes up the gauntlet!</h1>
         <p>
-          Everyone else is the Horde. The Horde answers first, then {one} answers alone. Each time {one} is right, the Horde members
+          Everyone else is the class. The class answers first, then {one} answers alone. Each time {one} is right, classmates
           who missed fall to the Comeback Crew and the Prize Pot grows.
         </p>
       </div>
@@ -238,7 +238,7 @@
 
       <div class="horde" class:lit={crowdLit}>
         <div class="horde-head">
-          <span><strong>{game.mobCount}</strong> in the Horde</span>
+          <span><strong>{game.mobCount}</strong> in the class</span>
           {#if game.crowdCount}<span class="crew-count"><strong>{game.crowdCount}</strong> in the Comeback Crew</span>{/if}
         </div>
         <Crowd people={crowd} size={crowdSize} names={crowd.length <= 24} />
@@ -250,7 +250,7 @@
         <div class="callout">
           <TimerRing {deadline} totalMs={s.settings.timerSeconds * 1000} paused={view.paused} size={150} />
           <div>
-            <h1>Horde, answer on your device!</h1>
+            <h1>Class, answer on your device!</h1>
             <p>{one}, eyes up here. Your turn is next. <span class="tally"><strong>{q.answered}</strong> of {q.eligible} answered</span></p>
           </div>
         </div>
@@ -274,11 +274,11 @@
         </div>
         {#if phase === 'PHASE_B'}
           {#if pollMode}
-            <p class="news">Poll the Class: tap the answer to ask the Horde about.</p>
+            <p class="news">Poll the Class: tap the answer to ask the class about.</p>
           {:else if q.helpResult}
             <p class="news">
               {#if q.helpResult.type === 'poll'}
-                <b>Poll the Class:</b> {q.helpResult.count} of {q.helpResult.total} in the Horde chose {String.fromCharCode(65 + q.helpResult.choice)}.
+                <b>Poll the Class:</b> {q.helpResult.count} of {q.helpResult.total} in the class chose {String.fromCharCode(65 + q.helpResult.choice)}.
               {:else if q.helpResult.type === 'ask'}
                 <b>Ask Two:</b>
                 {#each q.helpResult.speakers as sp, i (sp.playerId)}{i > 0 ? ' and ' : ''}<b>{sp.nickname}</b>{/each}, explain your answers out loud!
@@ -296,7 +296,7 @@
               {#if q.reveal.demoted.length}
                 {q.reveal.demoted.map(name).join(', ')} {q.reveal.demoted.length === 1 ? 'falls' : 'fall'} to the Comeback Crew, and the pot grows by {q.reveal.bankDelta}.
               {:else}
-                The whole Horde stood firm.
+                The whole class stood firm.
               {/if}
             {:else}
               <b>{one} misses!</b> One chance lost.
@@ -475,7 +475,7 @@
     color: rgb(255 250 243 / 0.75);
   }
 
-  /* Challenger versus the Horde */
+  /* Challenger versus the class */
   .versus {
     display: grid;
     grid-template-columns: minmax(16rem, 0.9fr) auto minmax(0, 2fr);

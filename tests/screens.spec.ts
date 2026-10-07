@@ -46,7 +46,7 @@ test('screens', async ({ browser }) => {
   await shot(kids[0], '08-phone-one-intro');
   await t.getByRole('button', { name: /Begin/ }).click();
 
-  // Q1 (A = 8): three of the Horde miss.
+  // Q1 (A = 8): three classmates miss.
   await expect(kids[1].getByRole('button', { name: 'A: 8' })).toBeVisible();
   await shot(kids[1], '09-phone-answer');
   for (const [i, c] of [[1, 'A: 8'], [2, 'B: −8'], [3, 'A: 8'], [4, 'C: 20']] as const) await kids[i].getByRole('button', { name: c }).click();

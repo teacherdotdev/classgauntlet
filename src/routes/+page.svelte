@@ -76,7 +76,7 @@
           <li>
             <span class="num">III</span>
             <h3>The spotlight picks a challenger</h3>
-            <p>The Horde answers first. Then the challenger answers alone, with three lifelines up their sleeve.</p>
+            <p>The class answers first. Then the challenger answers alone, with three lifelines up their sleeve.</p>
           </li>
         </ol>
 
@@ -89,7 +89,7 @@
           <div>
             <h3>Nobody gets knocked out</h3>
             <p>
-              When the challenger is right, Horde members who missed fall to the Comeback Crew and keep answering from there. The
+              When the challenger is right, classmates who missed fall to the Comeback Crew and keep answering from there. The
               challenger’s Prize Pot grows with every classmate they outlast.
             </p>
           </div>
@@ -103,7 +103,7 @@
       <div class="ends">
         <article class="end gules">
           <h3>The challenger falls</h3>
-          <p>Out of chances. The Horde splits the Prize Pot.</p>
+          <p>Out of chances. The class splits the Prize Pot.</p>
         </article>
         <article class="end azure">
           <h3>The challenger survives</h3>
@@ -111,7 +111,7 @@
         </article>
         <article class="end or">
           <h3>Jackpot!</h3>
-          <p>The whole Horde is outlasted. The pot pays out one and a half times.</p>
+          <p>The whole class is outlasted. The pot pays out one and a half times.</p>
         </article>
       </div>
       <ul class="lifelines">

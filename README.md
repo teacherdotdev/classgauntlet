@@ -8,14 +8,14 @@ A serverless rebuild of an [open-source EdTech-a-thon project](https://github.co
 
 1. The teacher picks a question set and opens a game on the projector. The lobby shows the site, a six-digit PIN and a QR code.
 2. Students join on their phones with the PIN and a nickname (up to 40).
-3. A spotlight sweeps the room and lands on the **challenger** (or the teacher picks one). Everyone else is **the Horde**.
-4. **The Horde answers first** on their phones. The question is hidden from the challenger and from the big screen.
+3. A spotlight sweeps the room and lands on the **challenger** (or the teacher picks one). Everyone else is **the class**.
+4. **The class answers first** on their phones. The question is hidden from the challenger and from the big screen.
 5. **Then the challenger** sees the question and answers, on their phone or by tapping the big screen at the front of the room. Once per round each, they can use a lifeline:
-   - **Poll the Class**: see how many in the Horde chose an answer.
+   - **Poll the Class**: see how many in the class chose an answer.
    - **Ask Two**: one classmate who was right and one who wasn't explain out loud (+5 each).
    - **Go with the Class**: lock in the most popular answer.
-6. **The reveal:** if the challenger is right, Horde members who missed fall to the **Comeback Crew** (they keep answering and scoring) and the **Prize Pot** grows by 20 each. If the challenger is wrong, they lose a chance.
-7. The round ends when the challenger runs out of chances (the Horde splits the pot), clears every question (the challenger banks the pot and the Horde gets a bonus), or outlasts the whole Horde (jackpot: pot × 1.5). Then a new challenger steps up.
+6. **The reveal:** if the challenger is right, classmates who missed fall to the **Comeback Crew** (they keep answering and scoring) and the **Prize Pot** grows by 20 each. If the challenger is wrong, they lose a chance.
+7. The round ends when the challenger runs out of chances (the class splits the pot), clears every question (the challenger banks the pot and classmates still standing get a bonus), or outlasts the whole class (jackpot: pot × 1.5). Then a new challenger steps up.
 
 Inside a question the game moves itself along (timer, hand-off to the challenger, drumroll, reveal); the teacher taps **Next** between questions. The scoring rules are ported unchanged from the original (`src/lib/game/scoring.ts`), including the optional **On a Roll** rule: quick answers without a lifeline win the challenger a chance back once per round.
 

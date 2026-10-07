@@ -163,7 +163,7 @@
           {:else}
             <Avatar name={one} size={84} />
             <h1>{one} takes up the gauntlet</h1>
-            <p>{me.role === 'crowd' ? 'You’re on the Comeback Crew.' : 'You’re in the Horde. Answer right to stay in it.'}</p>
+            <p>{me.role === 'crowd' ? 'You’re on the Comeback Crew.' : `You’re up against ${one}. Answer right to stay standing.`}</p>
           {/if}
         </div>
       {:else if phase === 'PHASE_A' || phase === 'PHASE_A_LOCKED'}
