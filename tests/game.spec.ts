@@ -1,85 +1,75 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-async function joinAs(browser: Browser, code: string, nickname: string): Promise<Page> {
-  const page = await (await browser.newContext()).newPage();
-  await page.goto(`/join?code=${code}`);
-  await page.getByLabel('Nickname').fill(nickname);
-  await page.getByRole('button', { name: 'Join the game' }).click();
+async function joinAs(browser: Browser, pin: string, nickname: string): Promise<Page> {
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await page.goto(`/join?code=${pin}`);
+  await page.getByLabel('Your name').fill(nickname);
+  await page.getByRole('button', { name: 'Join' }).click();
   await expect(page.getByRole('heading', { name: 'You’re in!' })).toBeVisible({ timeout: 30_000 });
   return page;
 }
 
-test('a full game over peer-to-peer: join, answer, spotlight, lifeline, reveal, reconnect', async ({ browser }) => {
-  const teacher = await (await browser.newContext()).newPage();
+test('a full game over peer-to-peer: join, spotlight, answers, lifeline, reveal, reconnects', async ({ browser }) => {
+  const teacher = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
   await teacher.goto('/host');
-  await teacher.getByRole('button', { name: 'Open the room' }).click();
-  await expect(teacher.getByText('Room open')).toBeVisible({ timeout: 30_000 });
-  const code = (await teacher.locator('strong.code').textContent())!.trim();
-  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  await teacher.getByRole('button', { name: /Sample: Grade 7 Math Review/ }).click();
+  await expect(teacher.locator('.lobby .status')).toHaveCount(0, { timeout: 30_000 });
+  const pin = (await teacher.locator('.pin strong').textContent())!.replace(/\D/g, '');
+  expect(pin).toMatch(/^\d{6}$/);
 
-  const projector = await teacher.context().newPage();
-  await projector.goto('/show');
-  await expect(projector.getByText(code[0], { exact: true }).first()).toBeVisible();
+  const ana = await joinAs(browser, pin, 'Ana');
+  const ben = await joinAs(browser, pin, 'Ben');
+  const cy = await joinAs(browser, pin, 'Cy');
+  await expect(teacher.locator('.count')).toContainText('3');
 
-  const ana = await joinAs(browser, code, 'Ana');
-  const ben = await joinAs(browser, code, 'Ben');
-  const cy = await joinAs(browser, code, 'Cy');
-  await expect(teacher.getByRole('heading', { name: '3 students in the room' })).toBeVisible();
+  // Choose Ana, then start: the spotlight sweeps and lands on her.
+  await teacher.getByRole('button', { name: 'Ana' }).click();
+  await teacher.getByRole('button', { name: 'Make them the challenger' }).click();
+  await teacher.getByRole('button', { name: 'Start' }).click();
+  await expect(teacher.getByRole('heading', { name: 'Ana takes up the gauntlet!' })).toBeVisible();
+  await expect(ana.getByRole('heading', { name: 'The spotlight is on you!' })).toBeVisible();
+  await teacher.getByRole('button', { name: /Begin/ }).click();
 
-  // Ana is The One.
-  await teacher.getByLabel('First Spotlight Player').selectOption({ label: 'Ana' });
-  await teacher.getByRole('button', { name: 'Start the game' }).click();
-  await expect(ana.getByRole('heading', { name: 'You’re in the Spotlight!' })).toBeVisible();
-  await expect(ben.getByRole('heading', { name: 'Ana is in the Spotlight' })).toBeVisible();
+  // Question 1 (answer A = 8). Neither Ana's phone nor the big screen shows it yet.
+  await expect(ana.getByRole('heading', { name: 'Eyes on the big screen' })).toBeVisible();
+  await expect(teacher.getByText('negative 6 plus 14')).toHaveCount(0);
+  await ben.getByRole('button', { name: 'A: 8' }).click();
+  await cy.getByRole('button', { name: 'B: -8' }).click();
+  await expect(ben.getByRole('heading', { name: 'Locked in!' })).toBeVisible();
 
-  // Question 1 (sample: "What is negative 6 plus 14?", answer A = 8).
-  await teacher.getByRole('button', { name: 'Open question 1' }).click();
-  await expect(ana.getByRole('heading', { name: 'The class is answering' })).toBeVisible();
-  await expect(ana.getByText('negative 6 plus 14')).toHaveCount(0);
-  await expect(projector.getByText('Answer on your device!')).toBeVisible();
-  await expect(projector.getByText('negative 6 plus 14')).toHaveCount(0);
-  await ben.getByRole('button', { name: /^A\. 8/ }).click();
-  await cy.getByRole('button', { name: /^B\. -8/ }).click();
-  await expect(teacher.getByRole('heading', { name: 'Class answers locked' })).toBeVisible();
-
-  await teacher.getByRole('button', { name: 'Show the question to Ana' }).click();
-  await expect(projector.getByText('What is negative 6 plus 14?')).toBeVisible();
-  await ana.getByRole('button', { name: /^A\. 8/ }).click();
-  await ana.getByRole('button', { name: 'Final answer: A' }).click();
-  await teacher.getByRole('button', { name: 'Reveal the answer' }).click();
-  await expect(ana.getByText('You got it!')).toBeVisible();
+  // The game hands the question to Ana by itself; one tap answers.
+  await expect(teacher.getByText('What is negative 6 plus 14?')).toBeVisible({ timeout: 10_000 });
+  await ana.getByRole('button', { name: 'A: 8' }).click();
+  await expect(ana.getByText('You’re right!')).toBeVisible({ timeout: 10_000 });
   await expect(ben.getByText('Correct!')).toBeVisible();
-  await expect(cy.getByText('You’re on the Comeback Crew now')).toBeVisible();
-  await expect(projector.getByText('Cy joins the Comeback Crew')).toBeVisible();
+  await expect(cy.getByText('You fall to the Comeback Crew')).toBeVisible();
+  await expect(teacher.getByText('Cy falls to the Comeback Crew')).toBeVisible();
 
-  // Ben reloads mid-game and keeps his seat and points.
+  // Ben reloads and keeps his seat and points.
   await ben.reload();
-  await expect(ben.locator('.me')).toContainText('Ben', { timeout: 30_000 });
-  await expect(ben.locator('.stats')).toContainText('12');
+  await expect(ben.locator('.strip .pts')).toHaveText('12', { timeout: 30_000 });
 
-  // Question 2 (answer B = -6): Ana polls the class.
+  // Question 2 (answer B = -6): Ana polls the class through the ⚡ button.
   await teacher.getByRole('button', { name: /Next question/ }).click();
-  await ben.getByRole('button', { name: /^B\. -6/ }).click();
-  await cy.getByRole('button', { name: /^A\. 6/ }).click();
-  await teacher.getByRole('button', { name: 'Show the question to Ana' }).click();
-  await ana.getByRole('button', { name: /^B\. -6/ }).click();
+  await ben.getByRole('button', { name: 'B: -6' }).click();
+  await cy.getByRole('button', { name: 'A: 6' }).click();
+  await ana.getByRole('button', { name: 'Lifelines' }).click({ timeout: 10_000 });
   await ana.getByRole('button', { name: /Poll the Class/ }).click();
-  await expect(ana.getByText('1 of 2 classmates chose B')).toBeVisible();
-  await ana.getByRole('button', { name: 'Final answer: B' }).click();
-  await teacher.getByRole('button', { name: 'Reveal the answer' }).click();
+  await ana.getByRole('button', { name: 'Poll answer B' }).click();
+  await expect(ana.getByText('1 of 2 chose B')).toBeVisible();
+  await ana.getByRole('button', { name: 'B: -6' }).click();
+  await expect(teacher.getByText('Ana is right!')).toBeVisible({ timeout: 10_000 });
 
-  // Ben is the last Challenge Team member and missed nothing; Ana is right again → game continues.
-  await expect(teacher.getByRole('heading', { name: 'Ana got it!' })).toBeVisible();
-
-  // The teacher reloads their tab: the game resumes and students reconnect.
+  // The teacher reloads: the game resumes and everyone reconnects.
   await teacher.reload();
-  await teacher.getByRole('button', { name: 'Resume game' }).click();
-  await expect(teacher.getByText('Room open')).toBeVisible({ timeout: 90_000 });
-  await expect(teacher.locator('.roster li:not(.offline)')).toHaveCount(3, { timeout: 30_000 });
+  await teacher.getByRole('button', { name: 'Resume' }).click();
+  await expect(teacher.locator('.conn')).toHaveCount(0, { timeout: 90_000 });
+  await expect(teacher.locator('.crowd li.away')).toHaveCount(0, { timeout: 30_000 });
+  await expect(teacher.locator('.offline')).toHaveCount(0, { timeout: 30_000 });
   await teacher.getByRole('button', { name: /Next question/ }).click();
-  await expect(ben.getByText('Everybody answers')).toBeVisible({ timeout: 15_000 });
+  await expect(ben.getByRole('button', { name: /^A: / })).toBeVisible({ timeout: 30_000 });
 
-  await teacher.getByRole('button', { name: 'End session…' }).click();
-  await teacher.getByRole('button', { name: 'End session' }).click();
-  await expect(cy.getByRole('heading', { name: 'Final standings' })).toBeVisible();
+  await teacher.getByRole('button', { name: 'Menu' }).click();
+  await teacher.getByRole('button', { name: 'End the game' }).click();
+  await expect(cy.getByText('Thanks for playing!')).toBeVisible();
 });

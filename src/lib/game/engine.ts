@@ -218,7 +218,9 @@ export class Engine {
 
   // ── Settings ───────────────────────────────────────────────────────────
 
-  updateSettings(patch: Partial<Pick<Settings, 'timerSeconds' | 'strikes' | 'questionsPerGame' | 'momentumEnabled'>>): Result {
+  updateSettings(
+    patch: Partial<Pick<Settings, 'timerSeconds' | 'strikes' | 'questionsPerGame' | 'momentumEnabled' | 'shuffleQuestions'>>,
+  ): Result {
     const next = { ...this.session.settings, ...patch };
     if (!Number.isInteger(next.timerSeconds) || next.timerSeconds < 5 || next.timerSeconds > 120)
       return no('Timer must be 5 to 120 seconds.');
@@ -226,7 +228,12 @@ export class Engine {
       return no('Strikes must be 1 to 5.');
     if (!Number.isInteger(next.questionsPerGame) || next.questionsPerGame < 1 || next.questionsPerGame > 50)
       return no('Questions per game must be 1 to 50.');
-    this.session.settings = next;
+    const s = this.session;
+    if (next.shuffleQuestions !== s.settings.shuffleQuestions && s.deckPos === 0) {
+      // Nothing has been played yet, so the whole deck can be reordered.
+      s.order = next.shuffleQuestions ? shuffled(s.questions.length, this.clock.random) : s.questions.map((_, i) => i);
+    }
+    s.settings = next;
     return this.changed();
   }
 
@@ -246,6 +253,13 @@ export class Engine {
     )[0];
   }
 
+  /** For the first round, the spotlight picks someone at random. */
+  randomOne(): Player | undefined {
+    const pool = this.session.players.filter((p) => p.connected && !p.hasBeenOne);
+    const list = pool.length > 0 ? pool : this.session.players;
+    return list[Math.floor(this.clock.random() * list.length)];
+  }
+
   chooseNextOne(playerId: string | null): Result {
     if (playerId !== null && !this.player(playerId)) return no('That player is not in this game.');
     this.session.pendingNextOneId = playerId;
@@ -256,7 +270,13 @@ export class Engine {
     const s = this.session;
     if (s.phase !== 'LOBBY' && s.phase !== 'LEADERBOARD') return no('Finish this game first.');
     if (s.questions.length === 0) return no('This question set is empty.');
-    const one = oneId ? this.player(oneId) : s.pendingNextOneId ? this.player(s.pendingNextOneId) : this.suggestedOne();
+    const one = oneId
+      ? this.player(oneId)
+      : s.pendingNextOneId
+        ? this.player(s.pendingNextOneId)
+        : s.phase === 'LOBBY'
+          ? this.randomOne()
+          : this.suggestedOne();
     if (!one) return no('Pick a student to be The One.');
     if (s.players.length < 2) return no('You need at least two students to play.');
     const size = Math.min(s.settings.questionsPerGame, s.questions.length);

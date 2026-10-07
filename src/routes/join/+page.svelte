@@ -1,20 +1,22 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import AnswerBlock from '#lib/components/AnswerBlock.svelte';
   import Avatar from '#lib/components/Avatar.svelte';
-  import Brand from '#lib/components/Brand.svelte';
-  import Choice from '#lib/components/Choice.svelte';
-  import Countdown from '#lib/components/Countdown.svelte';
-  import Hearts from '#lib/components/Hearts.svelte';
-  import Standings from '#lib/components/Standings.svelte';
+  import Gauntlet from '#lib/components/Gauntlet.svelte';
+  import LifelineIcon from '#lib/components/LifelineIcon.svelte';
+  import Shape from '#lib/components/Shape.svelte';
   import { NICKNAME_MAX } from '#lib/game/engine.ts';
-  import { cleanRoomCode } from '#lib/protocol.ts';
+  import type { Help } from '#lib/game/types.ts';
+  import { cleanRoomCode, spacedCode } from '#lib/protocol.ts';
   import { student } from '#lib/student.svelte.ts';
-  import { endHeadline, helpBlurb, helpName, roleName } from '#lib/words.ts';
+  import { endHeadline, helpBlurb, helpName } from '#lib/words.ts';
 
-  let code = $state(cleanRoomCode(page.url.searchParams.get('code') ?? ''));
+  const pinFromLink = cleanRoomCode(page.url.searchParams.get('code') ?? '');
+  let code = $state(pinFromLink);
+  let step = $state<'pin' | 'name'>(pinFromLink.length === 6 ? 'name' : 'pin');
   let nickname = $state('');
-  /** The One's highlighted answer before they commit to it. */
-  let draft = $state<number | null>(null);
+  let powerOpen = $state(false);
+  let polling = $state(false);
   let confirmLeave = $state(false);
 
   // Coming back to a game this device was already in: go straight back in.
@@ -27,10 +29,14 @@
     }
   });
 
-  function submit(event: SubmitEvent) {
+  function submitPin(event: SubmitEvent) {
     event.preventDefault();
-    code = cleanRoomCode(code);
-    if (code.length !== 6 || !nickname.trim()) return;
+    if (cleanRoomCode(code).length === 6) step = 'name';
+  }
+
+  function submitName(event: SubmitEvent) {
+    event.preventDefault();
+    if (!nickname.trim()) return;
     history.replaceState(history.state, '', `/join?code=${code}`);
     void student.join(code, nickname);
   }
@@ -38,512 +44,644 @@
   const view = $derived(student.view);
   const me = $derived(view?.self);
   const q = $derived(view?.question ?? null);
+  const phase = $derived(view?.phase);
   const iAmOne = $derived(me?.role === 'one');
-  const one = $derived(view?.game?.one.nickname ?? 'The One');
+  const one = $derived(view?.game?.one.nickname ?? 'The challenger');
   const letter = (i: number | null | undefined) => (i == null ? '' : String.fromCharCode(65 + i));
+  const tincture = (i: number | null | undefined) => ['var(--gules)', 'var(--azure)', 'var(--or)', 'var(--vert)'][i ?? 0];
 
-  // A new question clears The One's draft.
-  let lastAttempt = '';
+  const answering = $derived(phase === 'PHASE_A' && !view?.paused && !!me?.eligible && !iAmOne && me?.myAnswer === null);
+  const oneAnswering = $derived(phase === 'PHASE_B' && !view?.paused && iAmOne && q?.oneAnswer === null);
+  const helps = $derived(view?.game?.helpsAvailable);
+  const canPower = $derived(oneAnswering && !q?.helpUsed && !!helps && (helps.poll || helps.ask || helps.trust));
+  let seconds = $state<number | null>(null);
   $effect(() => {
-    const id = q?.attemptId ?? '';
-    if (id !== lastAttempt) {
-      lastAttempt = id;
-      draft = null;
-    }
+    const timer = setInterval(() => {
+      seconds = student.deadline === null ? null : Math.max(0, Math.ceil((student.deadline - Date.now()) / 1000));
+    }, 250);
+    return () => clearInterval(timer);
   });
 
-  function choiceState(i: number): 'idle' | 'picked' | 'correct' | 'wrong' | 'dim' {
-    if (!q) return 'idle';
-    if (q.reveal) {
-      if (i === q.reveal.correct) return 'correct';
-      return i === me?.myAnswer ? 'wrong' : 'dim';
-    }
-    if (iAmOne && view?.phase === 'PHASE_B') return draft === i ? 'picked' : 'idle';
-    if (me?.myAnswer != null) return i === me.myAnswer ? 'picked' : 'dim';
-    return 'idle';
+  function useHelp(help: Help, choice?: number) {
+    student.help(help, choice);
+    powerOpen = false;
+    polling = false;
   }
 
-  const canAnswerClass = $derived(view?.phase === 'PHASE_A' && !view.paused && !!me?.eligible && me.myAnswer === null && !iAmOne);
-  const canAnswerOne = $derived(view?.phase === 'PHASE_B' && !view.paused && iAmOne);
+  // The full-screen colour behind the current moment.
+  const mood = $derived.by(() => {
+    if (!view || !me) return 'night';
+    if (phase === 'REVEAL' && q?.reveal) {
+      if (iAmOne) return q.reveal.oneCorrect ? 'good' : 'bad';
+      if (me.myAnswer === null) return 'night';
+      return me.myAnswer === q.reveal.correct ? 'good' : 'bad';
+    }
+    if ((phase === 'PHASE_A' || phase === 'PHASE_A_LOCKED') && me.myAnswer !== null && !iAmOne) return 'chosen';
+    if (phase === 'ONE_LOCKED' && iAmOne) return 'chosen';
+    return 'night';
+  });
 </script>
 
-<svelte:head><title>{view ? `${student.nickname} · ${view.code}` : 'Join a game'} · Class Gauntlet</title></svelte:head>
+<svelte:head><title>{view ? `${student.nickname} · Class Gauntlet` : 'Join a game · Class Gauntlet'}</title></svelte:head>
 
-<main class="app">
-  <header class="bar">
-    <Brand size={24} />
-    {#if student.status === 'playing' || student.status === 'reconnecting'}
-      <span class="live" class:off={student.status !== 'playing'}>
-        <span class="dot" aria-hidden="true"></span>
-        {student.status === 'playing' ? 'Live' : 'Reconnecting…'}
-      </span>
-    {/if}
-  </header>
-
-  {#if !view || student.status === 'idle' || student.status === 'denied' || student.status === 'connecting' || student.status === 'removed'}
-    <section class="join panel">
+<main class="phone {mood}" style="--chosen: {tincture(iAmOne ? q?.oneAnswer : me?.myAnswer)}">
+  {#if !view || !me || student.status === 'idle' || student.status === 'denied' || student.status === 'connecting' || student.status === 'removed'}
+    <section class="join">
+      <div class="art"><Gauntlet size={120} /></div>
+      <h1>Class Gauntlet</h1>
       {#if student.status === 'removed'}
-        <h1>You left the game</h1>
-        <p class="lede">Your teacher removed you from this game. You can join again with a new nickname.</p>
-      {:else}
-        <h1>Join the game</h1>
-        <p class="lede">Type the code from the board and the name your class knows you by.</p>
+        <p class="sub">Your teacher removed you from that game.</p>
       {/if}
-      <form onsubmit={submit}>
-        <label class="field">
-          Code
+      {#if step === 'pin'}
+        <form onsubmit={submitPin}>
           <input
-            class="code-input"
+            class="big-input pin"
             bind:value={code}
             oninput={() => (code = cleanRoomCode(code))}
-            maxlength="6"
+            inputmode="numeric"
             autocomplete="off"
-            autocapitalize="characters"
-            spellcheck="false"
-            placeholder="ABC234"
-            required
+            placeholder="Game PIN"
+            aria-label="Game PIN"
           />
-        </label>
-        <label class="field">
-          Nickname
-          <input bind:value={nickname} maxlength={NICKNAME_MAX} autocomplete="nickname" placeholder="Your first name" required />
-        </label>
-        <button class="btn-primary big" type="submit" disabled={student.status === 'connecting'}>
-          {student.status === 'connecting' ? 'Joining…' : 'Join the game'}
-        </button>
-      </form>
+          <button class="go" disabled={code.length !== 6}>Enter</button>
+        </form>
+      {:else}
+        <form onsubmit={submitName}>
+          <button type="button" class="pin-chip" onclick={() => { step = 'pin'; student.leaveQuietly(); }}>PIN {spacedCode(code)} ✎</button>
+          <input
+            class="big-input"
+            bind:value={nickname}
+            maxlength={NICKNAME_MAX}
+            autocomplete="nickname"
+            placeholder="Your name"
+            aria-label="Your name"
+          />
+          <button class="go" disabled={!nickname.trim() || student.status === 'connecting'}>
+            {student.status === 'connecting' ? 'Joining…' : 'Join'}
+          </button>
+        </form>
+      {/if}
       {#if student.status === 'connecting'}
-        <p class="hint" role="status">
-          Finding your teacher’s game…
-          {#if student.slow}<br />Still trying. Check the code on the board; if it’s right, your school network may be slow to connect.{/if}
+        <p class="sub" role="status">
+          Finding the game…{#if student.slow}<br />Still trying. Double-check the PIN on the board.{/if}
         </p>
       {/if}
       {#if student.problem}<p class="problem" role="alert">{student.problem}</p>{/if}
+      {#if student.status === 'reconnecting' && student.slow}
+        <button class="link" onclick={() => student.leaveQuietly()}>Join a different game</button>
+      {/if}
     </section>
-  {:else if me}
-    <section class="me">
-      <Avatar name={me.nickname} size={40} />
-      <div>
-        <strong>{me.nickname}</strong>
-        <span class="pill" class:good={me.role === 'one'} class:muted={me.role === 'crowd'}>{roleName[me.role]}</span>
-      </div>
-      <div class="stats">
-        <span><small>Points</small><strong>{me.points}</strong></span>
-        {#if me.streak > 1}<span><small>Streak</small><strong>{me.streak}</strong></span>{/if}
-        {#if view.game && view.phase !== 'LOBBY' && view.phase !== 'ENDED'}
-          <span><small>Pot</small><strong>{view.game.bank}</strong></span>
-          <span><small>Chances</small><strong><Hearts left={view.game.strikes} total={view.game.baseStrikes} /></strong></span>
-        {/if}
-      </div>
-    </section>
+  {:else}
+    <header class="strip">
+      <Avatar name={me.nickname} size={30} />
+      <span class="me">{me.nickname}</span>
+      {#if me.role === 'crowd'}<span class="tag">Comeback Crew</span>{/if}
+      {#if iAmOne}<span class="tag gold">Challenger</span>{/if}
+      <span class="spacer"></span>
+      {#if phase === 'PHASE_A' && seconds !== null && !iAmOne}<span class="secs">{seconds}</span>{/if}
+      <span class="pts">{me.points}</span>
+      {#if canPower}
+        <button class="power" onclick={() => (powerOpen = true)} aria-label="Lifelines">⚡</button>
+      {/if}
+    </header>
+    {#if student.status === 'reconnecting'}<p class="banner">Reconnecting… your points are safe.</p>{/if}
 
-    {#if student.status === 'reconnecting'}
-      <p class="banner">Lost the connection to your teacher’s computer. Getting you back in… your points are safe.</p>
-    {/if}
-    {#if view.paused}
-      <p class="banner">Game paused. {view.pauseReason === 'one_disconnected' ? `Waiting for ${one} to reconnect.` : ''}</p>
-    {/if}
-
-    <section class="screen" aria-live="polite">
-      {#if view.phase === 'LOBBY'}
-        <h1>You’re in!</h1>
-        <p class="lede">Look for your name on the board. The game starts when your teacher is ready.</p>
-      {:else if view.phase === 'BETWEEN'}
-        {#if iAmOne}
-          <h1>You’re in the Spotlight!</h1>
-          <p class="lede">The class answers each question first. Then it’s your turn, with three lifelines to help. Every time you’re right, classmates who missed join the Comeback Crew and your Prize Pot grows.</p>
-        {:else}
-          <h1>{one} is in the Spotlight</h1>
-          <p class="lede">
-            {me.role === 'crowd'
-              ? 'You’re on the Comeback Crew: keep answering, keep scoring.'
-              : 'You’re on the Challenge Team. Get answers right to stay on it and make the Spotlight harder.'}
-          </p>
-        {/if}
-      {:else if view.phase === 'PHASE_A' || view.phase === 'PHASE_A_LOCKED'}
-        <div class="qhead">
-          <span class="label">{view.phase === 'PHASE_A' ? 'Everybody answers' : 'Answers locked'} · Question {q?.index}</span>
-          {#if view.phase === 'PHASE_A'}<Countdown deadline={student.deadline} paused={view.paused} />{/if}
+    <section class="screen">
+      {#if phase === 'LOBBY'}
+        <div class="moment">
+          <Avatar name={me.nickname} size={96} />
+          <h1>You’re in!</h1>
+          <p>See your name on the screen?</p>
         </div>
+      {:else if phase === 'BETWEEN'}
+        <div class="moment">
+          {#if iAmOne}
+            <Gauntlet size={130} />
+            <h1>The spotlight is on you!</h1>
+            <p>The class answers first. Then it’s your turn, with lifelines behind ⚡.</p>
+          {:else}
+            <Avatar name={one} size={84} />
+            <h1>{one} takes up the gauntlet</h1>
+            <p>{me.role === 'crowd' ? 'You’re on the Comeback Crew.' : 'You’re in the Horde. Answer right to stay in it.'}</p>
+          {/if}
+        </div>
+      {:else if phase === 'PHASE_A' || phase === 'PHASE_A_LOCKED'}
         {#if iAmOne}
-          <h1>{view.phase === 'PHASE_A' ? 'The class is answering' : 'Your question is next'}</h1>
-          <p class="lede">Take a breath. Your question is coming next, with lifelines if you need them.</p>
-          <p class="count">{q?.answered} / {q?.eligible} classmates answered</p>
-        {:else if q?.prompt && q.choices}
-          <h2 class="question">{q.prompt}</h2>
-          <div class="choices">
+          <div class="moment">
+            <h1>Eyes on the big screen</h1>
+            <p>Your classmates are answering. Your question is next!</p>
+            <p class="count">{q?.answered} / {q?.eligible}</p>
+          </div>
+        {:else if answering && q?.choices}
+          <p class="prompt">{q.prompt}</p>
+          <div class="pad" class:four={q.choices.length === 4}>
             {#each q.choices as text, i (i)}
-              <Choice index={i} {text} state={choiceState(i)} onclick={canAnswerClass ? () => student.answer(i) : undefined} />
+              <AnswerBlock index={i} {text} big onclick={() => student.answer(i)} />
             {/each}
           </div>
-          <p class="status">
-            {#if me.myAnswer !== null}
-              Locked in: <strong>{letter(me.myAnswer)}</strong>. {q.answered} / {q.eligible} answered.
-            {:else if view.phase === 'PHASE_A_LOCKED'}
-              Time’s up. No answer this round.
-            {:else}
-              Tap your answer. It locks in right away.
-            {/if}
-          </p>
+        {:else if me.myAnswer !== null}
+          <div class="moment">
+            <div class="stamp"><Shape index={me.myAnswer} size={72} /></div>
+            <h1>Locked in!</h1>
+            <p>{q?.answered} of {q?.eligible} answered</p>
+          </div>
+        {:else if phase === 'PHASE_A_LOCKED'}
+          <div class="moment"><h1>Time’s up!</h1><p>No answer this round. You’ll get the next one.</p></div>
         {:else}
-          <h1>You’ll jump in on the next question</h1>
-          <p class="lede">You joined while this question was open. Hang tight!</p>
+          <div class="moment"><h1>Hang tight</h1><p>You’ll jump in on the next question.</p></div>
         {/if}
-      {:else if (view.phase === 'PHASE_B' || view.phase === 'ONE_LOCKED' || view.phase === 'REVEAL') && q?.choices}
-        <div class="qhead">
-          <span class="label">
-            {view.phase === 'REVEAL' ? 'The Reveal' : iAmOne ? 'Your Spotlight Round' : `${one}’s turn`} · Question {q.index}
-          </span>
-        </div>
-        <h2 class="question">{q.prompt}</h2>
-
-        {#if me.isSpeaker && view.phase !== 'REVEAL'}
-          <p class="speaker">You’ve been asked! Tell {one} out loud why you chose <strong>{letter(me.myAnswer)}</strong>.</p>
-        {/if}
-
-        <div class="choices">
-          {#each q.choices as text, i (i)}
-            <Choice
-              index={i}
-              {text}
-              state={choiceState(i)}
-              note={q.reveal && i === q.oneAnswer ? `${iAmOne ? 'Your' : `${one}’s`} answer` : ''}
-              tally={q.reveal ? q.reveal.counts[i] : null}
-              onclick={canAnswerOne && q.helpUsed !== 'trust' ? () => (draft = i) : undefined}
-            />
-          {/each}
-        </div>
-
-        {#if view.phase === 'PHASE_B' && iAmOne}
-          <button class="btn-primary big final" disabled={draft === null || view.paused} onclick={() => draft !== null && student.oneAnswer(draft)}>
-            {draft === null ? 'Pick an answer' : `Final answer: ${letter(draft)}`}
-          </button>
+      {:else if phase === 'PHASE_B' || phase === 'ONE_LOCKED'}
+        {#if oneAnswering && q?.choices}
+          <p class="prompt">{q.prompt}</p>
           {#if q.helpResult}
-            <div class="help-result">
+            <p class="help-note">
               {#if q.helpResult.type === 'poll'}
-                <strong>Poll the Class:</strong> {q.helpResult.count} of {q.helpResult.total} classmates chose {letter(q.helpResult.choice)}.
+                <b>Poll:</b> {q.helpResult.count} of {q.helpResult.total} chose {letter(q.helpResult.choice)}.
               {:else if q.helpResult.type === 'ask'}
-                <strong>Ask Two:</strong>
-                {#each q.helpResult.speakers as sp, i (sp.playerId)}{i > 0 ? ' and ' : ''}<strong>{sp.nickname}</strong> chose {letter(sp.choice)}{/each}.
-                Listen to them explain — one of them is right.
+                <b>Ask Two:</b> listen to {q.helpResult.speakers.map((s) => s.nickname).join(' and ')}.
               {/if}
-            </div>
-          {:else if view.game}
-            <div class="helps" aria-label="Lifelines">
-              <p class="label">Lifelines · one per question</p>
-              <button class="help" disabled={!view.game.helpsAvailable.poll || draft === null} onclick={() => draft !== null && student.help('poll', draft)}>
-                <strong>{helpName.poll}</strong>
-                <span>{view.game.helpsAvailable.poll ? (draft === null ? 'Pick an answer first, then poll it' : `See how many chose ${letter(draft)}`) : 'Used'}</span>
-              </button>
-              <button class="help" disabled={!view.game.helpsAvailable.ask} onclick={() => student.help('ask')}>
-                <strong>{helpName.ask}</strong>
-                <span>{view.game.helpsAvailable.ask ? helpBlurb.ask : 'Used'}</span>
-              </button>
-              <button class="help" disabled={!view.game.helpsAvailable.trust} onclick={() => student.help('trust')}>
-                <strong>{helpName.trust}</strong>
-                <span>{view.game.helpsAvailable.trust ? helpBlurb.trust : 'Used'}</span>
-              </button>
-            </div>
+            </p>
           {/if}
-        {:else if view.phase === 'PHASE_B'}
-          <p class="status">{one} is thinking… {me.myAnswer !== null ? `You chose ${letter(me.myAnswer)}.` : ''}</p>
-        {:else if view.phase === 'ONE_LOCKED'}
-          <p class="status">
-            {iAmOne ? 'Your' : `${one}’s`} final answer: <strong>{letter(q.oneAnswer)}</strong>. Eyes on the board for the reveal!
-          </p>
-        {:else if q.reveal}
-          <div class="result" class:good={me.delta > 0 || (iAmOne && q.reveal.oneCorrect)}>
-            {#if iAmOne}
-              <strong>{q.reveal.oneCorrect ? 'You got it!' : 'Not this time.'}</strong>
-              {q.reveal.oneCorrect ? `+${me.delta} points, and the Prize Pot grows.` : 'You lost a chance.'}
-            {:else if me.myAnswer === null}
-              No answer this time. The answer was {letter(q.reveal.correct)}.
-            {:else if me.myAnswer === q.reveal.correct}
-              <strong>Correct!</strong> +{me.delta} points{me.streak > 1 ? ` · ${me.streak} in a row` : ''}.
+          <div class="pad" class:four={q.choices.length === 4}>
+            {#each q.choices as text, i (i)}
+              <AnswerBlock index={i} {text} big onclick={() => student.oneAnswer(i)} />
+            {/each}
+          </div>
+        {:else if iAmOne}
+          <div class="moment">
+            <div class="stamp"><Shape index={q?.oneAnswer ?? 0} size={72} /></div>
+            <h1>Final answer: {letter(q?.oneAnswer)}</h1>
+            <p>Look at the big screen…</p>
+          </div>
+        {:else}
+          <div class="moment">
+            {#if me.isSpeaker}
+              <h1 class="shout">Speak up!</h1>
+              <p>Tell {one} out loud why you chose <b>{letter(me.myAnswer)}</b>.</p>
             {:else}
-              <strong>Not quite.</strong> The answer was {letter(q.reveal.correct)}.
-            {/if}
-            {#if me.demoted}
-              <p>You’re on the Comeback Crew now — still playing and still scoring.</p>
+              <Avatar name={one} size={84} />
+              <h1>{phase === 'ONE_LOCKED' ? `${one} has answered…` : `${one} is thinking…`}</h1>
+              <p>{me.myAnswer !== null ? `You said ${letter(me.myAnswer)}.` : 'Watch the big screen.'}</p>
             {/if}
           </div>
-          {#if q.reveal.explanation}<p class="explain">{q.reveal.explanation}</p>{/if}
-          {#if view.game?.result}
-            <div class="game-over">
-              <p class="label">Game over</p>
-              <h2>{endHeadline(view.game.result.reason, one, view.game.result.bankedByOne)}</h2>
-              {#if me.payout > 0}<p><strong>You earned +{me.payout} in the finish!</strong></p>{/if}
-            </div>
-          {/if}
         {/if}
-      {:else if view.phase === 'LEADERBOARD' || view.phase === 'ENDED'}
-        <h1>{view.phase === 'ENDED' ? 'Final standings' : 'Leaderboard'}</h1>
-        <p class="lede">
-          You’re <strong>#{me.rank}</strong> with <strong>{me.points}</strong> points.
-          {#if view.phase === 'LEADERBOARD' && view.pendingNextOne?.id === me.id}<br /><strong>You’re up next in the Spotlight!</strong>{/if}
-        </p>
-        <Standings rows={view.standings} limit={8} highlight={me.id} />
+      {:else if phase === 'REVEAL' && q?.reveal}
+        <div class="moment">
+          {#if iAmOne}
+            <h1 class="shout">{q.reveal.oneCorrect ? 'You’re right!' : 'Not this time'}</h1>
+            <p>{q.reveal.oneCorrect ? `+${me.delta} points, and the Prize Pot grows.` : 'You lost a chance.'}</p>
+          {:else if me.myAnswer === null}
+            <h1>No answer</h1>
+            <p>The answer was {letter(q.reveal.correct)}.</p>
+          {:else if me.myAnswer === q.reveal.correct}
+            <h1 class="shout">Correct!</h1>
+            <p class="plus">+{me.delta}</p>
+            {#if me.streak > 1}<p>{me.streak} in a row</p>{/if}
+          {:else}
+            <h1 class="shout">Not quite</h1>
+            <p>The answer was {letter(q.reveal.correct)}.</p>
+          {/if}
+          {#if me.demoted}<p class="crew-note">You fall to the Comeback Crew.</p>{/if}
+          {#if view.game?.result}
+            <p class="over">{endHeadline(view.game.result.reason, one, view.game.result.bankedByOne)}</p>
+            {#if me.payout > 0}<p class="plus">+{me.payout} in the finish!</p>{/if}
+          {/if}
+        </div>
+      {:else if phase === 'LEADERBOARD' || phase === 'ENDED'}
+        <div class="moment">
+          <p class="rank">#{me.rank}</p>
+          <h1>{me.points} points</h1>
+          {#if phase === 'LEADERBOARD' && view.pendingNextOne?.id === me.id}
+            <p class="crew-note">You’re the next challenger!</p>
+          {:else}
+            <p>{phase === 'ENDED' ? 'Thanks for playing!' : 'Next round coming up.'}</p>
+          {/if}
+        </div>
       {/if}
     </section>
 
-    {#if view.phase !== 'ENDED'}
-      <div class="leave">
+    {#if phase === 'LOBBY' || phase === 'ENDED'}
+      <footer class="leave">
         {#if confirmLeave}
-          Leave this game? Your points stay with your teacher.
-          <button class="btn-danger" onclick={() => student.leave()}>Leave</button>
-          <button class="btn-quiet" onclick={() => (confirmLeave = false)}>Stay</button>
+          <button class="link" onclick={() => student.leave()}>Yes, leave</button>
+          <button class="link" onclick={() => (confirmLeave = false)}>Stay</button>
         {:else}
-          <button class="btn-quiet" onclick={() => (confirmLeave = true)}>Leave game</button>
+          <button class="link" onclick={() => (confirmLeave = true)}>Leave game</button>
         {/if}
-      </div>
+      </footer>
     {/if}
-  {:else}
-    <section class="join panel">
-      <p class="lede">Getting back into game <strong>{student.code}</strong>…</p>
-      {#if student.slow}
-        <p class="hint">Your teacher’s computer isn’t answering yet. If the game is over, join a new one.</p>
-        <button class="btn-ghost" onclick={() => student.leaveQuietly()}>Join a different game</button>
+
+    {#if view.paused}
+      <div class="veil" role="status"><h1>Paused</h1><p>{view.pauseReason === 'one_disconnected' ? `Waiting for ${one}…` : 'Hold on a moment.'}</p></div>
+    {/if}
+  {/if}
+
+  {#if powerOpen && helps && q?.choices}
+    <div class="sheet-back" onclick={() => (powerOpen = false)} role="presentation"></div>
+    <div class="sheet" role="dialog" aria-label="Lifelines">
+      <h2>Lifelines <small>one per question</small></h2>
+      {#if polling}
+        <p>Which answer should the class tell you about?</p>
+        <div class="poll-pick">
+          {#each q.choices as _, i (i)}
+            <button style="background: {tincture(i)}" onclick={() => useHelp('poll', i)} aria-label="Poll answer {letter(i)}"><Shape index={i} size={30} /></button>
+          {/each}
+        </div>
+        <button class="link" onclick={() => (polling = false)}>Back</button>
+      {:else}
+        {#each ['poll', 'ask', 'trust'] as const as h (h)}
+          <button class="life" disabled={!helps[h]} onclick={() => (h === 'poll' ? (polling = true) : useHelp(h))}>
+            <span class="ico"><LifelineIcon help={h} /></span>
+            <span><strong>{helpName[h]}</strong><small>{helps[h] ? helpBlurb[h] : 'Already used this round'}</small></span>
+          </button>
+        {/each}
       {/if}
-    </section>
+    </div>
   {/if}
 
   {#if student.notice}<p class="toast" role="status">{student.notice}</p>{/if}
 </main>
 
 <style>
-  .app {
-    max-width: 40rem;
-    margin: 0 auto;
-    padding: 0.75rem 1rem 2rem;
-    display: grid;
-    gap: 0.9rem;
+  .phone {
     min-height: 100dvh;
-    align-content: start;
-  }
-  .bar {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    color: var(--paper);
+    background:
+      radial-gradient(ellipse 90% 40% at 50% -5%, rgb(240 170 90 / 0.22), transparent 70%),
+      var(--night);
+    transition: background 0.4s;
   }
-  .live {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--good);
+  .phone.chosen {
+    background: var(--chosen);
   }
-  .live .dot {
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: 50%;
-    background: currentColor;
+  .phone.good {
+    background: var(--vert);
   }
-  .live.off {
-    color: var(--bad);
+  .phone.bad {
+    background: var(--gules);
   }
+
+  /* Joining */
   .join {
-    display: grid;
-    gap: 0.9rem;
-    border-radius: 14px;
-    padding: 1.5rem;
-    margin-top: 1rem;
-  }
-  .join h1 {
-    font-size: 1.8rem;
-  }
-  form {
-    display: grid;
-    gap: 0.9rem;
-  }
-  .code-input {
-    font-family: var(--serif) !important;
-    font-size: 1.8rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-  }
-  .hint {
-    color: var(--muted);
-    font-size: 0.9rem;
-  }
-  .problem {
-    background: var(--bad-wash);
-    border: 1px solid var(--bad-line);
-    color: var(--bad);
-    padding: 0.6rem 0.8rem;
-    border-radius: 8px;
-    font-weight: 600;
-  }
-  .me {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.4rem 0.75rem;
-    align-items: center;
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 0.75rem;
-  }
-  .me > div:first-of-type {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .stats {
-    grid-column: 1 / -1;
-    display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-  }
-  .stats span {
     flex: 1;
     display: grid;
-    background: var(--paper-low);
-    border-radius: 8px;
-    padding: 0.3rem 0.6rem;
+    align-content: center;
+    justify-items: center;
+    gap: 1rem;
+    padding: 2rem 1.25rem;
+    text-align: center;
   }
-  .stats small {
-    font-size: 0.65rem;
+  .join h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 3rem;
+    line-height: 1;
+  }
+  .join form {
+    width: min(22rem, 100%);
+    display: grid;
+    gap: 0.7rem;
+  }
+  .big-input {
+    width: 100%;
+    padding: 0.9rem;
+    border: none;
+    border-radius: 10px;
+    background: var(--paper);
+    color: var(--ink);
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.4rem;
+    text-align: center;
+  }
+  .big-input.pin {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 2.2rem;
+    letter-spacing: 0.15em;
+  }
+  .big-input::placeholder {
+    color: #a8998a;
+    letter-spacing: normal;
+  }
+  .go {
+    padding: 0.9rem;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--paper);
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.3rem;
+    box-shadow: inset 0 -5px 0 rgb(0 0 0 / 0.2);
+  }
+  .go:disabled {
+    opacity: 0.5;
+  }
+  .pin-chip {
+    justify-self: center;
+    background: rgb(255 250 243 / 0.12);
+    color: var(--paper);
+    border: none;
+    border-radius: 999px;
+    padding: 0.3rem 0.9rem;
+    font: inherit;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
   }
-  .stats strong {
-    font-family: var(--serif);
-    font-size: 1.15rem;
-    font-variant-numeric: tabular-nums;
+  .sub {
+    color: rgb(255 250 243 / 0.75);
+  }
+  .problem {
+    background: var(--paper);
+    color: var(--bad);
+    font-weight: 700;
+    padding: 0.6rem 0.9rem;
+    border-radius: 10px;
+    max-width: 22rem;
+  }
+  .link {
+    background: none;
+    border: none;
+    color: rgb(255 250 243 / 0.75);
+    text-decoration: underline;
+    font: inherit;
+    padding: 0.5rem;
+  }
+
+  /* In the game */
+  .strip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    background: rgb(0 0 0 / 0.25);
+  }
+  .me {
+    font-weight: 800;
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tag {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.45rem;
+    border-radius: 6px;
+    background: rgb(255 250 243 / 0.15);
+  }
+  .tag.gold {
+    background: var(--amber-strong);
+    color: var(--night);
+  }
+  .spacer {
+    flex: 1;
+  }
+  .secs {
+    font-family: var(--display);
+    font-size: 1.5rem;
+    min-width: 2rem;
+    text-align: center;
+  }
+  .pts {
+    font-family: var(--display);
+    font-size: 1.5rem;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 0 0.6rem;
+    border-radius: 8px;
+  }
+  .power {
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    border: none;
+    background: var(--amber-strong);
+    font-size: 1.3rem;
+    box-shadow: 0 0 0 0 rgb(240 210 124 / 0.6);
+    animation: glow 1.6s infinite;
+  }
+  @keyframes glow {
+    70% {
+      box-shadow: 0 0 0 12px rgb(240 210 124 / 0);
+    }
   }
   .banner {
     background: var(--amber);
-    border: 1px solid var(--amber-border);
     color: #6b4a00;
-    border-radius: 10px;
-    padding: 0.6rem 0.8rem;
-    font-weight: 600;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.4rem;
   }
   .screen {
-    display: grid;
-    gap: 0.85rem;
-    animation: rise 0.3s both;
-  }
-  .screen h1 {
-    font-size: 1.7rem;
-  }
-  .qhead {
+    flex: 1;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.75rem;
   }
-  .question {
-    font-size: 1.45rem;
-    font-weight: 600;
-  }
-  .choices {
+  .moment {
+    flex: 1;
     display: grid;
+    align-content: center;
+    justify-items: center;
     gap: 0.6rem;
+    text-align: center;
+    padding: 1rem;
+    animation: pop 0.35s both;
   }
-  .status,
-  .count {
-    color: var(--ink-soft);
+  .moment h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 2.6rem;
+    line-height: 1.05;
   }
-  .count {
-    font-family: var(--serif);
-    font-size: 1.3rem;
+  .moment p {
+    font-size: 1.15rem;
+    color: rgb(255 250 243 / 0.85);
+  }
+  .shout {
+    font-size: 3.4rem !important;
+  }
+  .plus {
+    font-family: var(--display);
+    font-size: 2.6rem !important;
+    color: var(--paper) !important;
+    background: rgb(0 0 0 / 0.2);
+    padding: 0 1rem;
+    border-radius: 10px;
+  }
+  .count,
+  .rank {
+    font-family: var(--display);
+    font-size: 3rem !important;
+    color: var(--paper) !important;
+  }
+  .rank {
+    font-size: 4.5rem !important;
+    line-height: 1;
+  }
+  .crew-note,
+  .over {
+    background: rgb(0 0 0 / 0.22);
+    padding: 0.6rem 0.9rem;
+    border-radius: 10px;
     font-weight: 700;
   }
-  .final {
-    width: 100%;
-  }
-  .helps {
+  .stamp {
     display: grid;
+    place-items: center;
+    width: 7rem;
+    height: 7rem;
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.18);
+  }
+  .prompt {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 1.2rem;
+    text-align: center;
+    padding: 0.8rem 1rem;
+    border-radius: 12px;
+  }
+  .help-note {
+    background: var(--amber);
+    color: #4a3300;
+    padding: 0.5rem 0.8rem;
+    border-radius: 10px;
+  }
+  .pad {
+    flex: 1;
+    display: grid;
+    gap: 0.6rem;
+    grid-auto-rows: 1fr;
+  }
+  .pad.four {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pad :global(.block) {
+    min-height: 5.5rem;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
     gap: 0.5rem;
   }
-  .help {
-    display: grid;
-    text-align: left;
-    gap: 0.1rem;
-    padding: 0.7rem 0.9rem;
-    border-radius: 10px;
-    border: 1px solid var(--line-strong);
-    background: var(--paper);
-    cursor: pointer;
+  .pad :global(.block .mark svg) {
+    width: 3.2rem;
+    height: 3.2rem;
   }
-  .help:hover:not(:disabled) {
-    background: var(--accent-wash);
-    border-color: var(--accent);
-  }
-  .help:disabled {
-    cursor: default;
-    opacity: 0.55;
-  }
-  .help span {
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-  .help-result,
-  .speaker {
-    background: var(--amber);
-    border: 1px solid var(--amber-border);
-    border-radius: 10px;
-    padding: 0.75rem 0.9rem;
-  }
-  .speaker {
-    font-size: 1.1rem;
-    animation: shake 0.4s 2;
-  }
-  .result {
-    padding: 0.85rem 1rem;
-    border-radius: 10px;
-    background: var(--paper);
-    border: 1px solid var(--line);
-    font-size: 1.1rem;
-  }
-  .result.good {
-    background: var(--good-wash);
-    border-color: var(--good-line);
-  }
-  .result p {
-    margin-top: 0.4rem;
-    font-size: 0.95rem;
-  }
-  .explain {
-    font-family: var(--serif);
-    font-style: italic;
-    color: var(--ink-soft);
-  }
-  .game-over {
-    padding: 1rem;
-    border: 2px solid var(--accent);
-    border-radius: 12px;
-    background: var(--paper);
-    display: grid;
-    gap: 0.35rem;
-  }
-  .game-over h2 {
-    color: var(--accent-dark);
-    font-size: 1.35rem;
+  .pad :global(.block .text) {
+    flex: none;
+    font-size: 1.5rem;
   }
   .leave {
     display: flex;
-    gap: 0.5rem;
-    align-items: center;
     justify-content: center;
-    flex-wrap: wrap;
+    padding-bottom: 1rem;
+  }
+  .veil {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    background: rgb(20 14 10 / 0.85);
+  }
+  .veil h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 3rem;
+  }
+
+  /* Lifelines sheet */
+  .sheet-back {
+    position: fixed;
+    inset: 0;
+    background: rgb(0 0 0 / 0.5);
+  }
+  .sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    gap: 0.6rem;
+    padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 18px 18px 0 0;
+    animation: rise 0.25s both;
+  }
+  .sheet h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 2rem;
+  }
+  .sheet h2 small {
+    font-family: var(--sans);
+    font-size: 0.85rem;
     color: var(--muted);
-    font-size: 0.9rem;
-    margin-top: 1rem;
+  }
+  .life {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    text-align: left;
+    padding: 0.8rem;
+    border-radius: 12px;
+    border: 1px solid var(--line-strong);
+    background: #fff;
+    font: inherit;
+    color: inherit;
+  }
+  .life:disabled {
+    opacity: 0.45;
+  }
+  .life span:last-child {
+    display: grid;
+  }
+  .life small {
+    color: var(--muted);
+  }
+  .ico {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    background: var(--amber-strong);
+    color: var(--night);
+    flex: none;
+  }
+  .poll-pick {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 0.5rem;
+  }
+  .poll-pick button {
+    display: grid;
+    place-items: center;
+    height: 4rem;
+    border: none;
+    border-radius: 10px;
+  }
+  .sheet .link {
+    color: var(--muted);
   }
   .toast {
     position: fixed;
     left: 50%;
     bottom: 1rem;
     transform: translateX(-50%);
-    background: var(--ink-soft);
-    color: var(--paper);
+    background: var(--paper);
+    color: var(--ink);
+    font-weight: 700;
     padding: 0.6rem 1rem;
     border-radius: 10px;
     box-shadow: var(--shadow-dialog);

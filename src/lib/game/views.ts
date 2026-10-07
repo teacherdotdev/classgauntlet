@@ -49,6 +49,8 @@ export type View = {
     choices: string[] | null;
     answered: number;
     eligible: number;
+    /** Who has answered (never what they chose), for the crowd on the big screen. */
+    answeredIds: string[];
     /** Ms left to answer, measured when this view was made. */
     remainingMs: number | null;
     helpUsed: Help | null;
@@ -151,6 +153,7 @@ export function buildView(
             choices: promptVisible ? active.question.choices : null,
             answered: active.answers.length,
             eligible: active.eligible.length,
+            answeredIds: active.answers.map((a) => a.playerId),
             remainingMs:
               s.phase !== 'PHASE_A'
                 ? null

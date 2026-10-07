@@ -12,6 +12,16 @@
   src: url('/fonts/literata-latin.woff2') format('woff2');
 }
 @font-face {
+  font-family: 'Pirata One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/pirata-one.woff2') format('woff2');
+  /* Blackletter digits are hard to read (its 0 looks like an 8), so numbers
+     like the PIN, points and the timer fall through to Literata. */
+  unicode-range: U+0000-002F, U+003A-FFFF;
+}
+@font-face {
   font-family: 'Literata';
   font-style: italic;
   font-weight: 400 700;
@@ -42,7 +52,16 @@
   --amber-strong: #f0d27c;
   --amber-border: #d9a93a;
 
-  /* One colour family per answer letter, so A/B/C/D read at a glance. */
+  /* Answers wear heraldic tinctures (gules, azure, or, vert) and a shape each,
+     so A/B/C/D read at a glance from the back row and without colour. */
+  --gules: #b23f2c;
+  --azure: #2f5d8f;
+  --or: #b38418;
+  --vert: #3c7150;
+  --night: #241c17;
+  --steel: #c9ccd1;
+
+  /* Paler versions of each answer colour, for the set editor. */
   --a-wash: #e4ecf5;
   --a-line: #b9cde4;
   --a-ink: #3f5a7c;
@@ -63,6 +82,7 @@
   --shadow-dialog: 0 16px 48px rgb(51 42 36 / 0.25);
 
   --serif: 'Literata', Georgia, 'Times New Roman', serif;
+  --display: 'Pirata One', 'Literata', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-family: var(--sans);
   color: var(--ink);
@@ -81,6 +101,7 @@ h1,
 h2,
 h3 {
   font-family: var(--serif);
+  text-wrap: balance;
   margin: 0;
   line-height: 1.2;
 }
@@ -283,6 +304,20 @@ dialog::backdrop {
   }
   75% {
     transform: translateX(4px);
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+}
+@keyframes pulse {
+  50% {
+    transform: scale(1.04);
   }
 }
 @keyframes rise {

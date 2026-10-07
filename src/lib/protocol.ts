@@ -20,24 +20,18 @@ export type HostMessage =
   | { type: 'removed' }
   | { type: 'ping' };
 
-/** Between the teacher's tab and a projector window on the same computer. */
-export type ShowMessage = { type: 'hello' } | { type: 'view'; view: View; joinUrl: string } | { type: 'closed' };
-
-export const showChannelName = 'classgauntlet-show';
-
-/** Six characters that are hard to misread on a projector: no 0/O, 1/I/L. */
-const codeAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
+/** A six-digit game PIN, easy to type on a phone's number pad. */
 export function newRoomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(6));
-  return [...bytes].map((b) => codeAlphabet[b % codeAlphabet.length]).join('');
+  return String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
 }
 
 export function cleanRoomCode(input: string): string {
-  return input
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, 6);
+  return input.replace(/\D/g, '').slice(0, 6);
+}
+
+/** "482913" → "482 913", for reading off the board. */
+export function spacedCode(code: string): string {
+  return code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
 }
 
 export function joinUrl(origin: string, code: string): string {

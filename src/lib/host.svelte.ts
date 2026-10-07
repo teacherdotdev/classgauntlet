@@ -3,14 +3,7 @@ import { createPeer, keepAlive, roomPrefix } from './peer';
 import { createSession, Engine, type Result } from './game/engine';
 import type { Question, Session, Settings } from './game/types';
 import { buildView, type View } from './game/views';
-import {
-  joinUrl,
-  newRoomCode,
-  showChannelName,
-  type HostMessage,
-  type ShowMessage,
-  type StudentMessage,
-} from './protocol';
+import { joinUrl, newRoomCode, type HostMessage, type StudentMessage } from './protocol';
 
 /**
  * The teacher's tab is the game. It holds a room address on the matchmaking
@@ -68,7 +61,6 @@ class HostRoom {
 
   #peer: Peer | null = null;
   #connections = new Map<string, DataConnection>();
-  #channel: BroadcastChannel | null = null;
   #ticker = 0;
   #reclaimTries = 0;
   #broadcastQueued = false;
@@ -93,15 +85,36 @@ class HostRoom {
     this.close();
     this.engine = engine;
     this.#reclaimTries = 0;
-    this.#channel = new BroadcastChannel(showChannelName);
-    this.#channel.onmessage = (event: MessageEvent<ShowMessage>) => {
-      if (event.data.type === 'hello') this.#postShow();
-    };
-    this.#ticker = window.setInterval(() => {
-      if (this.engine?.tick()) this.#commit();
-    }, 200);
+    this.#ticker = window.setInterval(() => this.#tick(), 200);
     this.#commit();
     void this.#open();
+  }
+
+  /**
+   * The game moves itself along inside a question, so the teacher only taps
+   * Next between questions: the class's timer runs out (or everyone answers),
+   * a beat later the question swings to The One, and a drumroll after The One
+   * locks in, the answer is revealed.
+   */
+  #phaseSeen = '';
+  #phaseSince = 0;
+  static readonly beats: Partial<Record<string, number>> = { PHASE_A_LOCKED: 2200, ONE_LOCKED: 2600 };
+
+  #tick() {
+    const engine = this.engine;
+    if (!engine) return;
+    let changed = engine.tick();
+    const phase = engine.session.phase;
+    if (phase !== this.#phaseSeen) {
+      this.#phaseSeen = phase;
+      this.#phaseSince = Date.now();
+    }
+    const beat = HostRoom.beats[phase];
+    if (beat !== undefined && Date.now() - this.#phaseSince >= beat) {
+      const result = phase === 'PHASE_A_LOCKED' ? engine.showToOne() : engine.reveal();
+      changed ||= result.ok;
+    }
+    if (changed) this.#commit();
   }
 
   async #open() {
@@ -126,10 +139,17 @@ class HostRoom {
     peer.on('error', (error) => {
       if (this.#peer !== peer) return;
       if (error.type === 'unavailable-id') {
-        // The server still remembers this tab from before a reload. It lets go
-        // within a minute, so keep trying for the same code.
+        // Either another game has this PIN, or the server still remembers this
+        // tab from before a reload (it lets go within a minute). A game nobody
+        // has joined yet just takes a new PIN; a game in progress keeps trying.
         peer.destroy();
         this.#peer = null;
+        if (engine.session.players.length === 0 && engine.session.phase === 'LOBBY') {
+          engine.session.code = newRoomCode();
+          this.#commit();
+          void this.#open();
+          return;
+        }
         this.#reclaimTries++;
         this.status = 'reclaiming';
         if (this.#reclaimTries > 40) {
@@ -245,11 +265,6 @@ class HostRoom {
         view: buildView(engine.session, { now, pauseReason: engine.pauseReason, viewerId: playerId }),
       });
     }
-    this.#postShow();
-  }
-
-  #postShow() {
-    if (this.view && this.#channel) this.#channel.postMessage({ type: 'view', view: this.view, joinUrl: this.joinUrl } satisfies ShowMessage);
   }
 
   /** Runs a teacher command; shows its message if it wasn't allowed. */
@@ -292,9 +307,6 @@ class HostRoom {
 
   close() {
     this.#hangUp();
-    this.#channel?.postMessage({ type: 'closed' } satisfies ShowMessage);
-    this.#channel?.close();
-    this.#channel = null;
     this.engine = null;
     this.session = null;
     this.view = null;

@@ -3,7 +3,7 @@ import type { EndReason, Phase, Role } from './game/types';
 /** The friendly names the original game used on screen. */
 export const roleName: Record<Role, string> = {
   one: 'Spotlight Player',
-  mob: 'Challenge Team',
+  mob: 'The Horde',
   crowd: 'Comeback Crew',
 };
 
@@ -27,7 +27,7 @@ export const phaseName: Record<Phase, string> = {
 };
 
 export function endHeadline(reason: EndReason, one: string, bankedByOne: number): string {
-  if (reason === 'flameout') return `The Challenge Team wins the Prize Pot!`;
+  if (reason === 'flameout') return `The Horde wins the Prize Pot!`;
   if (reason === 'mob_emptied') return `Jackpot! ${one} wins ${bankedByOne} points`;
   return `${one} cleared every question!`;
 }
@@ -35,10 +35,10 @@ export function endHeadline(reason: EndReason, one: string, bankedByOne: number)
 export function endDetail(reason: EndReason, one: string, teamWinners: number): string {
   if (reason === 'flameout')
     return teamWinners > 0
-      ? `${one} ran out of chances. ${teamWinners} Challenge Team ${teamWinners === 1 ? 'player splits' : 'players split'} the pot.`
-      : `${one} ran out of chances. The Challenge Team holds the room.`;
-  if (reason === 'mob_emptied') return 'The whole Challenge Team joined the Comeback Crew — and everyone is still playing.';
-  return `${one} banks the Prize Pot, and every Challenge Team survivor earns a finish bonus.`;
+      ? `${one} ran out of chances. ${teamWinners} ${teamWinners === 1 ? 'member of the Horde splits' : 'members of the Horde split'} the pot.`
+      : `${one} ran out of chances. The Horde holds the field.`;
+  if (reason === 'mob_emptied') return 'The whole Horde fell to the Comeback Crew.';
+  return `${one} banks the Prize Pot, and everyone left in the Horde earns a bonus.`;
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
