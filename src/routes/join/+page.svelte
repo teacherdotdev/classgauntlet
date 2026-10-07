@@ -130,6 +130,7 @@
       {#if student.status === 'reconnecting' && student.slow}
         <button class="link" onclick={() => student.leaveQuietly()}>Join a different game</button>
       {/if}
+      <p class="fine"><a href="/about">About</a> · <a href="/privacy">Privacy</a></p>
     </section>
   {:else}
     <header class="strip">
@@ -392,6 +393,14 @@
   }
   .sub {
     color: rgb(255 250 243 / 0.75);
+  }
+  .fine {
+    margin-top: 1rem;
+    font-size: 0.82rem;
+    color: rgb(255 250 243 / 0.5);
+  }
+  .fine a {
+    color: inherit;
   }
   .problem {
     background: var(--paper);

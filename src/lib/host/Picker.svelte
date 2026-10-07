@@ -2,6 +2,7 @@
   // Before a game: pick a question set and go. (The rules live behind the
   // gear in the lobby.)
   import Brand from '../components/Brand.svelte';
+  import Footer from '../components/Footer.svelte';
   import { DEFAULT_SETTINGS, type Settings } from '../game/types';
   import { forgetSavedGame, host, savedGame } from '../host.svelte';
   import { library } from '../questions/store.svelte';
@@ -65,6 +66,7 @@
     <li><a class="set new" href="/questions/edit?new=1"><span class="title">+ Write a new set</span><span class="meta">Or import one from a spreadsheet</span></a></li>
   </ul>
 </main>
+<Footer />
 
 <style>
   .picker {
