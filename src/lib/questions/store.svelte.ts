@@ -12,7 +12,12 @@ const key = 'classgauntlet:sets';
 function load(): QuestionSet[] {
   try {
     const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw) as QuestionSet[];
+    if (raw) {
+      // An untouched copy of the sample (never saved, so updatedAt 0) follows the latest version.
+      return (JSON.parse(raw) as QuestionSet[]).map((set) =>
+        set.id === sampleSetId && set.updatedAt === 0 ? sampleSet() : set,
+      );
+    }
   } catch {
     /* fall through to the sample */
   }

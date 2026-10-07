@@ -5,16 +5,16 @@ import type { QuestionSet } from '../game/types';
  * so a teacher can try a game before writing their own questions.
  */
 const rows: [string, string[], number, string][] = [
-  ['What is negative 6 plus 14?', ['8', '-8', '20'], 0, 'Moving fourteen units right from negative six lands on eight.'],
-  ['What is 9 minus 15?', ['6', '-6', '-24'], 1, 'Subtracting fifteen from nine gives negative six.'],
-  ['What is negative 4 multiplied by 7?', ['28', '-28', '-11'], 1, 'A negative number times a positive number is negative.'],
-  ['What is negative 36 divided by negative 6?', ['-6', '6', '30'], 1, 'A negative divided by a negative is positive.'],
-  ['Which expression has a value of negative 3?', ['5 - 8', '8 - 5', '-5 - 8'], 0, 'Five minus eight equals negative three.'],
-  ['A recipe uses 3 cups of flour for 2 batches. How many cups are needed for 6 batches?', ['7', '9', '12'], 1, 'Six batches is three times as many, so the flour is three times three cups.'],
-  ['A car travels 180 miles in 3 hours at a constant speed. What is its unit rate?', ['60 miles per hour', '90 miles per hour', '540 miles per hour'], 0, 'Divide 180 miles by 3 hours.'],
-  ['Which ratio is equivalent to 4 to 6?', ['2 to 3', '3 to 2', '8 to 10'], 0, 'Dividing both parts of 4 to 6 by two gives 2 to 3.'],
-  ['A 20-dollar item is discounted by 25 percent. What is the sale price?', ['5 dollars', '15 dollars', '18 dollars'], 1, 'Twenty-five percent of twenty dollars is five dollars, and twenty minus five is fifteen.'],
-  ['On a map 1 inch represents 8 miles. How many miles does 3.5 inches represent?', ['11.5 miles', '24 miles', '28 miles'], 2, 'Multiply 3.5 inches by 8 miles per inch.'],
+  ['−6 + 14 = ?', ['8', '−8', '20'], 0, '−6 + 14 = 8'],
+  ['9 − 15 = ?', ['6', '−6', '−24'], 1, '9 − 15 = −6'],
+  ['−4 × 7 = ?', ['28', '−28', '−11'], 1, '(−) × (+) = (−), so −4 × 7 = −28'],
+  ['−36 ÷ (−6) = ?', ['−6', '6', '30'], 1, '(−) ÷ (−) = (+), so −36 ÷ (−6) = 6'],
+  ['Which equals −3?', ['5 − 8', '8 − 5', '−5 − 8'], 0, '5 − 8 = −3'],
+  ['2 batches : 3 cups of flour. 6 batches : ? cups', ['7', '9', '12'], 1, '6 ÷ 2 = 3, and 3 × 3 = 9'],
+  ['180 mi in 3 h. Unit rate?', ['60 mi/h', '90 mi/h', '540 mi/h'], 0, '180 ÷ 3 = 60 mi/h'],
+  ['4 : 6 = ?', ['2 : 3', '3 : 2', '8 : 10'], 0, '(4 ÷ 2) : (6 ÷ 2) = 2 : 3'],
+  ['$20 − 25% = ?', ['$5', '$15', '$18'], 1, '25% × $20 = $5, and $20 − $5 = $15'],
+  ['Map: 1 in = 8 mi. 3.5 in = ?', ['11.5 mi', '24 mi', '28 mi'], 2, '3.5 × 8 = 28 mi'],
 ];
 
 export const sampleSetId = 'sample-grade7-math';

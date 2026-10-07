@@ -32,13 +32,13 @@ test('a full game over peer-to-peer: join, spotlight, answers, lifeline, reveal,
 
   // Question 1 (answer A = 8). Neither Ana's phone nor the big screen shows it yet.
   await expect(ana.getByRole('heading', { name: 'Eyes on the big screen' })).toBeVisible();
-  await expect(teacher.getByText('negative 6 plus 14')).toHaveCount(0);
+  await expect(teacher.getByText('−6 + 14')).toHaveCount(0);
   await ben.getByRole('button', { name: 'A: 8' }).click();
-  await cy.getByRole('button', { name: 'B: -8' }).click();
+  await cy.getByRole('button', { name: 'B: −8' }).click();
   await expect(ben.getByRole('heading', { name: 'Locked in!' })).toBeVisible();
 
   // The game hands the question to Ana by itself; one tap answers.
-  await expect(teacher.getByText('What is negative 6 plus 14?')).toBeVisible({ timeout: 10_000 });
+  await expect(teacher.getByText('−6 + 14 = ?')).toBeVisible({ timeout: 10_000 });
   await ana.getByRole('button', { name: 'A: 8' }).click();
   await expect(ana.getByText('You’re right!')).toBeVisible({ timeout: 10_000 });
   await expect(ben.getByText('Correct!')).toBeVisible();
@@ -51,13 +51,13 @@ test('a full game over peer-to-peer: join, spotlight, answers, lifeline, reveal,
 
   // Question 2 (answer B = -6): Ana polls the class through the ⚡ button.
   await teacher.getByRole('button', { name: /Next question/ }).click();
-  await ben.getByRole('button', { name: 'B: -6' }).click();
+  await ben.getByRole('button', { name: 'B: −6' }).click();
   await cy.getByRole('button', { name: 'A: 6' }).click();
   await ana.getByRole('button', { name: 'Lifelines' }).click({ timeout: 10_000 });
   await ana.getByRole('button', { name: /Poll the Class/ }).click();
   await ana.getByRole('button', { name: 'Poll answer B' }).click();
   await expect(ana.getByText('1 of 2 chose B')).toBeVisible();
-  await ana.getByRole('button', { name: 'B: -6' }).click();
+  await ana.getByRole('button', { name: 'B: −6' }).click();
   await expect(teacher.getByText('Ana is right!')).toBeVisible({ timeout: 10_000 });
 
   // The teacher reloads: the game resumes and everyone reconnects.

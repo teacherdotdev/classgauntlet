@@ -49,13 +49,13 @@ test('screens', async ({ browser }) => {
   // Q1 (A = 8): three of the Horde miss.
   await expect(kids[1].getByRole('button', { name: 'A: 8' })).toBeVisible();
   await shot(kids[1], '09-phone-answer');
-  for (const [i, c] of [[1, 'A: 8'], [2, 'B: -8'], [3, 'A: 8'], [4, 'C: 20']] as const) await kids[i].getByRole('button', { name: c }).click();
+  for (const [i, c] of [[1, 'A: 8'], [2, 'B: −8'], [3, 'A: 8'], [4, 'C: 20']] as const) await kids[i].getByRole('button', { name: c }).click();
   await t.waitForTimeout(700);
   await shot(t, '10-phaseA');
   await shot(kids[1], '11-phone-locked');
   await shot(kids[0], '12-phone-one-wait');
-  for (const [i, c] of [[5, 'A: 8'], [6, 'B: -8'], [7, 'A: 8']] as const) await kids[i].getByRole('button', { name: c }).click();
-  await expect(t.getByText('What is negative 6 plus 14?')).toBeVisible({ timeout: 10_000 });
+  for (const [i, c] of [[5, 'A: 8'], [6, 'B: −8'], [7, 'A: 8']] as const) await kids[i].getByRole('button', { name: c }).click();
+  await expect(t.getByText('−6 + 14 = ?')).toBeVisible({ timeout: 10_000 });
   await t.waitForTimeout(700);
   await shot(t, '13-phaseB');
   await shot(kids[0], '14-phone-one-answer');
@@ -71,10 +71,10 @@ test('screens', async ({ browser }) => {
 
   // Q2 (B = -6): Ana polls from the big screen, then misses twice to end the round.
   await t.getByRole('button', { name: /Next question/ }).click();
-  for (const k of kids.slice(1)) await k.getByRole('button', { name: 'B: -6' }).click();
+  for (const k of kids.slice(1)) await k.getByRole('button', { name: 'B: −6' }).click();
   await t.getByRole('button', { name: 'Poll the Class' }).click({ timeout: 10_000 });
   await shot(t, '19-poll-mode');
-  await t.getByRole('button', { name: 'B: -6' }).click();
+  await t.getByRole('button', { name: 'B: −6' }).click();
   await t.waitForTimeout(300);
   await shot(t, '20-poll-result');
   await t.getByRole('button', { name: 'A: 6' }).click();
