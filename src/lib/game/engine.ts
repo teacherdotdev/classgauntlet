@@ -1,0 +1,641 @@
+import { momentumWindowMs, scoreReveal } from './scoring';
+import {
+  DEFAULT_SETTINGS,
+  type Attempt,
+  type Help,
+  type Player,
+  type Question,
+  type Session,
+  type Settings,
+} from './types';
+
+/**
+ * The rules of 1 vs 100, run by the teacher's tab. Every command checks that it
+ * is allowed right now, changes the session in place, and returns ok or a
+ * message a person can read. The host saves and broadcasts after each change.
+ *
+ * A game, in order:
+ *   LOBBY ─start→ BETWEEN ─open→ PHASE_A (class answers) ─timer/all in→ PHASE_A_LOCKED
+ *   ─show to One→ PHASE_B (One answers, may use a lifeline) ─final answer→ ONE_LOCKED
+ *   ─reveal→ REVEAL ─next→ PHASE_A … or, when the game is over, LEADERBOARD ─start→ BETWEEN …
+ */
+
+export type Result = { ok: true } | { ok: false; message: string };
+const ok: Result = { ok: true };
+const no = (message: string): Result => ({ ok: false, message });
+
+export const MAX_PLAYERS = 40;
+export const NICKNAME_MAX = 24;
+const DENYLIST = ['damn', 'idiot', 'stupid', 'hell', 'crap', 'sucks', 'loser', 'dumb'];
+
+export type Clock = { now: () => number; random: () => number };
+const systemClock: Clock = { now: () => Date.now(), random: () => Math.random() };
+
+export function randomId(random = Math.random): string {
+  let id = '';
+  for (let i = 0; i < 16; i++) id += Math.floor(random() * 36).toString(36);
+  return id;
+}
+
+export function normalizeNickname(nickname: string): string {
+  return nickname.normalize('NFKC').trim().replace(/\s+/g, ' ');
+}
+
+export function nicknameProblem(display: string, taken: Iterable<string>): string | null {
+  if (display.length === 0) return 'Type a nickname.';
+  if (display.length > NICKNAME_MAX) return `Keep your nickname to ${NICKNAME_MAX} letters.`;
+  const words = display.toLowerCase().split(/[^\p{L}\p{N}]+/u);
+  if (DENYLIST.some((word) => words.includes(word))) return 'Please choose a different nickname.';
+  const lower = display.toLowerCase();
+  const takenSet = new Set([...taken].map((name) => name.toLowerCase()));
+  if (takenSet.has(lower)) {
+    for (let n = 2; n < 100; n++) {
+      const suggestion = `${display.slice(0, NICKNAME_MAX - 3)} ${n}`;
+      if (!takenSet.has(suggestion.toLowerCase()))
+        return `Someone is already "${display}". Try "${suggestion}".`;
+    }
+    return 'That nickname is taken.';
+  }
+  return null;
+}
+
+function shuffled(length: number, random: () => number): number[] {
+  const order = Array.from({ length }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+}
+
+export function createSession(input: {
+  code: string;
+  setTitle: string;
+  questions: Question[];
+  settings?: Partial<Settings>;
+  clock?: Clock;
+}): Session {
+  const clock = input.clock ?? systemClock;
+  const settings = { ...DEFAULT_SETTINGS, ...input.settings };
+  return {
+    version: 1,
+    code: input.code,
+    createdAt: clock.now(),
+    setTitle: input.setTitle,
+    questions: input.questions.map((q) => ({ ...q, choices: [...q.choices] })),
+    order: settings.shuffleQuestions
+      ? shuffled(input.questions.length, clock.random)
+      : input.questions.map((_, i) => i),
+    deckPos: 0,
+    settings,
+    players: [],
+    phase: 'LOBBY',
+    paused: false,
+    game: null,
+    pendingNextOneId: null,
+    history: [],
+    seq: 0,
+  };
+}
+
+export type PauseReason = 'teacher' | 'one_disconnected';
+
+export class Engine {
+  session: Session;
+  readonly clock: Clock;
+  pauseReason: PauseReason | null = null;
+  /** Players removed by the teacher; their device may not rejoin as the same player. */
+  readonly kicked = new Set<string>();
+
+  constructor(session: Session, clock: Clock = systemClock) {
+    this.session = session;
+    this.clock = clock;
+    // A reload forgets who is online; everyone reconnects.
+    for (const player of session.players) player.connected = false;
+    if (session.paused) this.pauseReason = 'teacher';
+  }
+
+  private changed(): Result {
+    this.session.seq++;
+    return ok;
+  }
+
+  player(id: string): Player | undefined {
+    return this.session.players.find((p) => p.id === id);
+  }
+
+  get one(): Player | undefined {
+    const game = this.session.game;
+    return game ? this.player(game.oneId) : undefined;
+  }
+
+  /** True between the first question of a game and its final reveal. */
+  get gameLive(): boolean {
+    return !['LOBBY', 'LEADERBOARD', 'ENDED'].includes(this.session.phase);
+  }
+
+  // ── Joining ────────────────────────────────────────────────────────────
+
+  /**
+   * A device introduces itself. A device that has been here before brings its
+   * player id and secret and gets its seat (and points) back.
+   */
+  join(input: {
+    playerId?: string;
+    secret?: string;
+    nickname: string;
+  }): { ok: true; player: Player; rejoined: boolean } | { ok: false; message: string } {
+    const s = this.session;
+    if (input.playerId && this.kicked.has(input.playerId))
+      return { ok: false, message: 'Your teacher removed you from this game.' };
+    const existing = input.playerId ? this.player(input.playerId) : undefined;
+    if (existing) {
+      if (existing.secret !== input.secret) return { ok: false, message: 'That seat belongs to another device.' };
+      existing.connected = true;
+      this.onReconnect(existing);
+      this.changed();
+      return { ok: true, player: existing, rejoined: true };
+    }
+    if (s.phase === 'ENDED') return { ok: false, message: 'This game has ended.' };
+    if (s.players.length >= MAX_PLAYERS)
+      return { ok: false, message: `This game is full (${MAX_PLAYERS} players).` };
+    const nickname = normalizeNickname(input.nickname);
+    const problem = nicknameProblem(
+      nickname,
+      s.players.map((p) => p.nickname),
+    );
+    if (problem) return { ok: false, message: problem };
+    const player: Player = {
+      id: randomId(this.clock.random),
+      secret: randomId(this.clock.random),
+      nickname,
+      // Late joiners play with the Comeback Crew until the next game starts.
+      role: s.phase === 'LOBBY' ? 'mob' : 'crowd',
+      points: 0,
+      streak: 0,
+      hasBeenOne: false,
+      joinedAt: this.clock.now(),
+      connected: true,
+    };
+    s.players.push(player);
+    this.changed();
+    return { ok: true, player, rejoined: false };
+  }
+
+  setConnected(playerId: string, connected: boolean): void {
+    const player = this.player(playerId);
+    if (!player || player.connected === connected) return;
+    player.connected = connected;
+    if (connected) this.onReconnect(player);
+    else if (playerId === this.session.game?.oneId && this.session.phase === 'PHASE_B' && !this.session.paused) {
+      // The One's device dropped mid-answer: hold the room until they are back.
+      this.pause('one_disconnected');
+    }
+    this.changed();
+  }
+
+  private onReconnect(player: Player) {
+    if (player.id === this.session.game?.oneId && this.pauseReason === 'one_disconnected') this.resume();
+  }
+
+  kick(playerId: string): Result {
+    const s = this.session;
+    if (playerId === s.game?.oneId && this.gameLive)
+      return no('The One can’t be removed during their game. End the game first.');
+    const index = s.players.findIndex((p) => p.id === playerId);
+    if (index < 0) return no('That player already left.');
+    s.players.splice(index, 1);
+    this.kicked.add(playerId);
+    if (s.pendingNextOneId === playerId) s.pendingNextOneId = null;
+    const active = s.game?.active;
+    if (active && s.phase === 'PHASE_A') {
+      active.eligible = active.eligible.filter((id) => id !== playerId);
+      active.answers = active.answers.filter((a) => a.playerId !== playerId);
+      if (active.answers.length >= active.eligible.length) this.lock();
+    }
+    return this.changed();
+  }
+
+  // ── Settings ───────────────────────────────────────────────────────────
+
+  updateSettings(patch: Partial<Pick<Settings, 'timerSeconds' | 'strikes' | 'questionsPerGame' | 'momentumEnabled'>>): Result {
+    const next = { ...this.session.settings, ...patch };
+    if (!Number.isInteger(next.timerSeconds) || next.timerSeconds < 5 || next.timerSeconds > 120)
+      return no('Timer must be 5 to 120 seconds.');
+    if (!Number.isInteger(next.strikes) || next.strikes < 1 || next.strikes > 5)
+      return no('Strikes must be 1 to 5.');
+    if (!Number.isInteger(next.questionsPerGame) || next.questionsPerGame < 1 || next.questionsPerGame > 50)
+      return no('Questions per game must be 1 to 50.');
+    this.session.settings = next;
+    return this.changed();
+  }
+
+  // ── Games ──────────────────────────────────────────────────────────────
+
+  /** Who goes next if the teacher doesn't choose: the top scorer who hasn't had a turn. */
+  suggestedOne(): Player | undefined {
+    const s = this.session;
+    const pool = s.players.filter((p) => !p.hasBeenOne);
+    const candidates = pool.length > 0 ? pool : s.players;
+    return [...candidates].sort(
+      (a, b) =>
+        Number(b.connected) - Number(a.connected) ||
+        b.points - a.points ||
+        a.joinedAt - b.joinedAt ||
+        a.id.localeCompare(b.id),
+    )[0];
+  }
+
+  chooseNextOne(playerId: string | null): Result {
+    if (playerId !== null && !this.player(playerId)) return no('That player is not in this game.');
+    this.session.pendingNextOneId = playerId;
+    return this.changed();
+  }
+
+  startGame(oneId?: string): Result {
+    const s = this.session;
+    if (s.phase !== 'LOBBY' && s.phase !== 'LEADERBOARD') return no('Finish this game first.');
+    if (s.questions.length === 0) return no('This question set is empty.');
+    const one = oneId ? this.player(oneId) : s.pendingNextOneId ? this.player(s.pendingNextOneId) : this.suggestedOne();
+    if (!one) return no('Pick a student to be The One.');
+    if (s.players.length < 2) return no('You need at least two students to play.');
+    const size = Math.min(s.settings.questionsPerGame, s.questions.length);
+    const deck: number[] = [];
+    for (let i = 0; i < size; i++) {
+      if (s.deckPos >= s.order.length) {
+        // Out of questions: go round the deck again, reshuffled if asked.
+        s.order = s.settings.shuffleQuestions ? shuffled(s.questions.length, this.clock.random) : s.order;
+        s.deckPos = 0;
+      }
+      deck.push(s.order[s.deckPos++]);
+    }
+    for (const p of s.players) {
+      p.role = p.id === one.id ? 'one' : 'mob';
+      p.streak = 0;
+    }
+    one.hasBeenOne = true;
+    s.game = {
+      ordinal: (s.game?.ordinal ?? 0) + 1,
+      oneId: one.id,
+      deck,
+      offset: 0,
+      strikes: s.settings.strikes,
+      bank: 0,
+      helpsUsed: { poll: false, ask: false, trust: false },
+      momentum: { progress: 0, awardedOnce: false },
+      active: null,
+      reveal: null,
+      result: null,
+    };
+    s.pendingNextOneId = null;
+    s.phase = 'BETWEEN';
+    s.paused = false;
+    this.pauseReason = null;
+    return this.changed();
+  }
+
+  /** Opens the next question to everyone except The One. */
+  openQuestion(): Result {
+    const s = this.session;
+    const game = s.game;
+    if (!game || (s.phase !== 'BETWEEN' && s.phase !== 'REVEAL')) return no('There is no question to open right now.');
+    if (game.result) return no('This game is over.');
+    const position = game.deck[game.offset];
+    const question = position === undefined ? undefined : s.questions[position];
+    if (!question) return no('No question is ready.');
+    const now = this.clock.now();
+    const eligible = s.players.filter((p) => p.role !== 'one' && p.connected).map((p) => p.id);
+    game.active = {
+      id: randomId(this.clock.random),
+      index: game.offset + 1,
+      question,
+      startedAt: now,
+      deadline: now + s.settings.timerSeconds * 1000,
+      pausedRemainingMs: null,
+      pausedAt: null,
+      eligible,
+      answers: [],
+      phaseBStartedAt: null,
+      oneAnswer: null,
+      oneMs: null,
+      helpUsed: null,
+      helpResult: null,
+    };
+    game.reveal = null;
+    s.phase = 'PHASE_A';
+    if (eligible.length === 0) s.phase = 'PHASE_A_LOCKED';
+    return this.changed();
+  }
+
+  answer(playerId: string, attemptId: string, choice: number): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || s.phase !== 'PHASE_A' || s.paused) return no('Answers are closed.');
+    if (active.id !== attemptId) return no('That question has already closed.');
+    if (!active.eligible.includes(playerId)) return no('You’ll jump in on the next question.');
+    if (!Number.isInteger(choice) || choice < 0 || choice >= active.question.choices.length)
+      return no('Choose one of the answers shown.');
+    if (active.deadline !== null && this.clock.now() >= active.deadline) return no('Time is up.');
+    if (active.answers.some((a) => a.playerId === playerId)) return no('Your answer is already locked.');
+    active.answers.push({ playerId, choice, ms: this.clock.now() - active.startedAt });
+    if (active.answers.length >= active.eligible.length) this.lock();
+    return this.changed();
+  }
+
+  /** Locks the class's answers early (or when the timer runs out). */
+  lock(): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || s.phase !== 'PHASE_A') return no('Answers are not open.');
+    active.deadline = null;
+    active.pausedRemainingMs = null;
+    active.pausedAt = null;
+    s.paused = false;
+    this.pauseReason = null;
+    s.phase = 'PHASE_A_LOCKED';
+    return this.changed();
+  }
+
+  /** Call often; locks Phase A when its timer runs out. Returns true if anything changed. */
+  tick(): boolean {
+    const s = this.session;
+    const active = s.game?.active;
+    if (s.phase === 'PHASE_A' && !s.paused && active?.deadline != null && this.clock.now() >= active.deadline) {
+      this.lock();
+      return true;
+    }
+    return false;
+  }
+
+  /** The class is locked in; now The One sees the question. */
+  showToOne(): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || s.phase !== 'PHASE_A_LOCKED') return no('The class is still answering.');
+    active.phaseBStartedAt = this.clock.now();
+    s.phase = 'PHASE_B';
+    if (!this.one?.connected) this.pause('one_disconnected');
+    return this.changed();
+  }
+
+  private helpCheck(playerId: string, help: Help): { ok: false; message: string } | { ok: true; active: Attempt } {
+    const s = this.session;
+    const game = s.game;
+    const active = game?.active;
+    if (!game || !active || s.phase !== 'PHASE_B' || s.paused) return { ok: false, message: 'Lifelines are only for the Spotlight Round.' };
+    if (game.oneId !== playerId) return { ok: false, message: 'Only The One can use a lifeline.' };
+    if (s.settings.helpsPerGame[help] <= 0 || game.helpsUsed[help]) return { ok: false, message: 'That lifeline is already used.' };
+    if (active.helpUsed) return { ok: false, message: 'You already used a lifeline on this question.' };
+    return { ok: true, active };
+  }
+
+  /** Poll the Class: The One picks an answer and sees how many classmates chose it. */
+  helpPoll(playerId: string, choice: number): Result {
+    const check = this.helpCheck(playerId, 'poll');
+    if (!check.ok) return check;
+    const { active } = check;
+    if (!Number.isInteger(choice) || choice < 0 || choice >= active.question.choices.length)
+      return no('Choose one of the answers shown.');
+    active.helpUsed = 'poll';
+    active.helpResult = {
+      type: 'poll',
+      choice,
+      count: active.answers.filter((a) => a.choice === choice).length,
+      total: active.answers.length,
+    };
+    this.session.game!.helpsUsed.poll = true;
+    return this.changed();
+  }
+
+  /** Ask Two: one classmate who got it right and one who didn't explain their thinking out loud. */
+  helpAsk(playerId: string): Result {
+    const check = this.helpCheck(playerId, 'ask');
+    if (!check.ok) return check;
+    const { active } = check;
+    const here = active.answers.filter((a) => this.player(a.playerId)?.connected);
+    const right = here.filter((a) => a.choice === active.question.correct);
+    const wrong = here.filter((a) => a.choice !== active.question.correct);
+    if (right.length === 0 || wrong.length === 0)
+      return no('Ask Two needs classmates with different answers this time. Try another lifeline!');
+    const pick = <T>(list: T[]) => list[Math.floor(this.clock.random() * list.length)];
+    const chosen = [pick(right), pick(wrong)];
+    if (this.clock.random() < 0.5) chosen.reverse();
+    const bonus = this.session.settings.askSpeakerBonus;
+    for (const a of chosen) {
+      const p = this.player(a.playerId);
+      if (p) p.points += bonus;
+    }
+    active.helpUsed = 'ask';
+    active.helpResult = {
+      type: 'ask',
+      speakers: chosen.map((a) => ({ playerId: a.playerId, nickname: this.player(a.playerId)?.nickname ?? 'Classmate', choice: a.choice })),
+      bonusEach: bonus,
+    };
+    this.session.game!.helpsUsed.ask = true;
+    return this.changed();
+  }
+
+  /** Go with the Class: lock in the class's most popular answer. */
+  helpTrust(playerId: string): Result {
+    const check = this.helpCheck(playerId, 'trust');
+    if (!check.ok) return check;
+    const { active } = check;
+    if (active.answers.length === 0) return no('Nobody in the class answered this one.');
+    const counts = active.question.choices.map((_, i) => active.answers.filter((a) => a.choice === i).length);
+    const top = Math.max(...counts);
+    const tied = counts.flatMap((count, i) => (count === top ? [i] : []));
+    const choice = tied[Math.floor(this.clock.random() * tied.length)];
+    active.helpUsed = 'trust';
+    active.helpResult = { type: 'trust', choice, counts };
+    this.session.game!.helpsUsed.trust = true;
+    return this.lockOne(active, choice);
+  }
+
+  oneAnswer(playerId: string, attemptId: string, choice: number): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || s.phase !== 'PHASE_B' || s.paused) return no('It isn’t your turn to answer.');
+    if (s.game!.oneId !== playerId) return no('Only The One answers now.');
+    if (active.id !== attemptId) return no('That question has already closed.');
+    if (!Number.isInteger(choice) || choice < 0 || choice >= active.question.choices.length)
+      return no('Choose one of the answers shown.');
+    return this.lockOne(active, choice);
+  }
+
+  /** When The One's device is gone, the teacher can enter their spoken answer. */
+  answerForOne(choice: number): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || s.phase !== 'PHASE_B') return no('The One isn’t answering right now.');
+    if (!Number.isInteger(choice) || choice < 0 || choice >= active.question.choices.length) return no('Pick an answer.');
+    s.paused = false;
+    this.pauseReason = null;
+    return this.lockOne(active, choice);
+  }
+
+  private lockOne(active: Attempt, choice: number): Result {
+    active.oneAnswer = choice;
+    active.oneMs = this.clock.now() - (active.phaseBStartedAt ?? this.clock.now());
+    this.session.phase = 'ONE_LOCKED';
+    return this.changed();
+  }
+
+  /** Shows the right answer, scores everyone, and decides whether the game is over. */
+  reveal(): Result {
+    const s = this.session;
+    const game = s.game;
+    const active = game?.active;
+    if (!game || !active || s.phase !== 'ONE_LOCKED' || active.oneAnswer === null) return no('The One hasn’t locked an answer yet.');
+    const correct = active.question.correct;
+    const oneCorrect = active.oneAnswer === correct;
+    const answers = new Map(active.answers.map((a) => [a.playerId, a.choice]));
+    const scored = scoreReveal({
+      players: s.players.map((p) => ({ id: p.id, role: p.role, points: p.points, streak: p.streak })),
+      eligible: active.eligible,
+      answers,
+      correct,
+      oneId: game.oneId,
+      oneCorrect,
+      strikes: game.strikes,
+      bank: game.bank,
+      questionNumber: active.index,
+      deckSize: game.deck.length,
+      settings: s.settings,
+    });
+
+    // On a Roll: fast, unaided right answers fill a meter that restores one strike, once per game.
+    let strikes = scored.strikes;
+    let momentumCredited = false;
+    let momentumFilled = false;
+    if (s.settings.momentumEnabled && oneCorrect && active.helpUsed === null && active.oneMs !== null) {
+      const roles = new Map(s.players.map((p) => [p.id, p.role]));
+      const window = momentumWindowMs(
+        active.answers.map((a) => ({ choice: a.choice, ms: a.ms, role: roles.get(a.playerId) ?? 'crowd' })),
+        correct,
+        s.settings,
+      );
+      if (active.oneMs <= window) {
+        momentumCredited = true;
+        game.momentum.progress++;
+        if (!game.momentum.awardedOnce && game.momentum.progress >= s.settings.momentumThreshold) {
+          game.momentum.awardedOnce = true;
+          momentumFilled = true;
+          strikes++;
+        }
+      }
+    }
+
+    const byId = new Map(scored.players.map((p) => [p.id, p]));
+    for (const p of s.players) {
+      const next = byId.get(p.id);
+      if (!next) continue;
+      p.points = next.points;
+      p.streak = next.streak;
+      p.role = next.role;
+    }
+    game.strikes = strikes;
+    game.bank = scored.bank;
+    game.offset = active.index;
+    game.reveal = {
+      correct,
+      oneAnswer: active.oneAnswer,
+      oneCorrect,
+      counts: active.question.choices.map((_, i) => active.answers.filter((a) => a.choice === i).length),
+      demoted: scored.demoted,
+      deltas: scored.deltas,
+      bankDelta: scored.bankDelta,
+      momentumCredited,
+      momentumFilled,
+    };
+    if (scored.endReason) {
+      game.result = { reason: scored.endReason, payouts: scored.payouts, bank: scored.bank, bankedByOne: scored.bankedByOne };
+      s.history.push({ ordinal: game.ordinal, oneId: game.oneId, reason: scored.endReason, bankedByOne: scored.bankedByOne });
+    }
+    s.phase = 'REVEAL';
+    return this.changed();
+  }
+
+  /** From the reveal: next question, or the leaderboard if the game is over. */
+  next(): Result {
+    const s = this.session;
+    if (s.phase === 'BETWEEN') return this.openQuestion();
+    if (s.phase !== 'REVEAL' || !s.game) return no('Reveal the answer first.');
+    if (s.game.result) {
+      s.phase = 'LEADERBOARD';
+      s.pendingNextOneId = this.suggestedOne()?.id ?? null;
+      return this.changed();
+    }
+    return this.openQuestion();
+  }
+
+  pause(reason: PauseReason = 'teacher'): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!active || (s.phase !== 'PHASE_A' && s.phase !== 'PHASE_B')) return no('You can pause while a question is open.');
+    if (s.paused) return ok;
+    const now = this.clock.now();
+    if (s.phase === 'PHASE_A' && active.deadline !== null) {
+      active.pausedRemainingMs = Math.max(0, active.deadline - now);
+      active.deadline = null;
+    }
+    active.pausedAt = now;
+    s.paused = true;
+    this.pauseReason = reason;
+    return this.changed();
+  }
+
+  resume(): Result {
+    const s = this.session;
+    const active = s.game?.active;
+    if (!s.paused || !active) return no('The game isn’t paused.');
+    const now = this.clock.now();
+    const pausedFor = active.pausedAt === null ? 0 : now - active.pausedAt;
+    if (s.phase === 'PHASE_A' && active.pausedRemainingMs !== null) {
+      // Give at least a few seconds back so nobody is cut off mid-tap.
+      active.deadline = now + Math.max(3000, active.pausedRemainingMs);
+      active.startedAt += pausedFor;
+      active.pausedRemainingMs = null;
+    }
+    if (s.phase === 'PHASE_B' && active.phaseBStartedAt !== null) active.phaseBStartedAt += pausedFor;
+    active.pausedAt = null;
+    s.paused = false;
+    this.pauseReason = null;
+    return this.changed();
+  }
+
+  /** Stops the current game without a winner and goes to the leaderboard. */
+  endGame(): Result {
+    const s = this.session;
+    if (!s.game || !this.gameLive) return no('No game is running.');
+    s.game.active = null;
+    s.game.reveal = null;
+    s.paused = false;
+    this.pauseReason = null;
+    s.phase = 'LEADERBOARD';
+    s.pendingNextOneId = this.suggestedOne()?.id ?? null;
+    return this.changed();
+  }
+
+  endSession(): Result {
+    const s = this.session;
+    if (s.phase === 'ENDED') return ok;
+    s.phase = 'ENDED';
+    s.paused = false;
+    this.pauseReason = null;
+    if (s.game) s.game.active = null;
+    return this.changed();
+  }
+}
+
+export type Standing = { rank: number; playerId: string; nickname: string; points: number; hasBeenOne: boolean; role: Player['role'] };
+
+export function standings(players: Player[]): Standing[] {
+  const sorted = [...players].sort((a, b) => b.points - a.points || a.joinedAt - b.joinedAt || a.id.localeCompare(b.id));
+  let rank = 0;
+  let previous: number | undefined;
+  return sorted.map((p, i) => {
+    if (p.points !== previous) rank = i + 1;
+    previous = p.points;
+    return { rank, playerId: p.id, nickname: p.nickname, points: p.points, hasBeenOne: p.hasBeenOne, role: p.role };
+  });
+}

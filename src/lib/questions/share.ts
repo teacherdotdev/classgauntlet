@@ -1,0 +1,59 @@
+import type { QuestionSet } from '../game/types';
+
+/**
+ * A question set can travel in a link: the set is compressed into the part of
+ * the address after #, which browsers never send to a server. Opening the link
+ * offers to add the set to that teacher's library.
+ */
+
+type Packed = { t: string; s?: string; g?: string; q: [string, string[], number, string?][] };
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(text: string): Uint8Array {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
+  const out = new Blob([bytes as BlobPart]).stream().pipeThrough(stream);
+  return new Uint8Array(await new Response(out).arrayBuffer());
+}
+
+export async function shareLink(origin: string, set: QuestionSet): Promise<string> {
+  const packed: Packed = {
+    t: set.title,
+    ...(set.subject ? { s: set.subject } : {}),
+    ...(set.grade ? { g: set.grade } : {}),
+    q: set.questions.map((q) => (q.explanation ? [q.prompt, q.choices, q.correct, q.explanation] : [q.prompt, q.choices, q.correct])),
+  };
+  const bytes = await pipe(new TextEncoder().encode(JSON.stringify(packed)), new CompressionStream('deflate-raw'));
+  return `${origin}/questions#set=${toBase64Url(bytes)}`;
+}
+
+export async function readShared(hash: string): Promise<Omit<QuestionSet, 'id' | 'updatedAt'> | null> {
+  const match = hash.match(/set=([\w-]+)/);
+  if (!match) return null;
+  try {
+    const bytes = await pipe(fromBase64Url(match[1]), new DecompressionStream('deflate-raw'));
+    const packed = JSON.parse(new TextDecoder().decode(bytes)) as Packed;
+    return {
+      title: String(packed.t),
+      subject: packed.s,
+      grade: packed.g,
+      questions: packed.q.map(([prompt, choices, correct, explanation], i) => ({
+        id: `shared-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        prompt: String(prompt),
+        choices: choices.map(String),
+        correct: Number(correct),
+        explanation: explanation ? String(explanation) : undefined,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}

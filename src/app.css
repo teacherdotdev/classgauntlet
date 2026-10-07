@@ -1,0 +1,301 @@
+/*
+ * The teacher.dev paper look, shared with Morphology Mash: cream paper on a
+ * warm ground, brown ink, a terracotta accent. Headings and questions are set
+ * in Literata like a printed page; the controls around them stay plain.
+ */
+
+@font-face {
+  font-family: 'Literata';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/literata-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Literata';
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/literata-latin-italic.woff2') format('woff2');
+}
+
+:root {
+  --ground: #eee6da;
+  --paper: #fffaf3;
+  --paper-low: #f2e6d8;
+  --line: #e0d3c2;
+  --line-strong: #bda995;
+  --ink: #332a24;
+  --ink-soft: #4e3b2f;
+  --muted: #6e5b4d;
+  --accent: #9f5037;
+  --accent-dark: #87422e;
+  --accent-wash: #f4e0cf;
+  --accent-line: #ecd0bb;
+  --good: #3f6a47;
+  --good-wash: #e6efe4;
+  --good-line: #b9d3b6;
+  --bad: #a3321f;
+  --bad-wash: #f8e0da;
+  --bad-line: #eec8be;
+  --amber: #f6e2a8;
+  --amber-strong: #f0d27c;
+  --amber-border: #d9a93a;
+
+  /* One colour family per answer letter, so A/B/C/D read at a glance. */
+  --a-wash: #e4ecf5;
+  --a-line: #b9cde4;
+  --a-ink: #3f5a7c;
+  --b-wash: #f6ecd4;
+  --b-line: #e2cd97;
+  --b-ink: #7a5a1c;
+  --c-wash: #f2e4ee;
+  --c-line: #dcc2d4;
+  --c-ink: #6f4262;
+  --d-wash: #e3efe9;
+  --d-line: #b5d2c4;
+  --d-ink: #2f6150;
+
+  --radius: 10px;
+  --shadow-rest: 0 1px 2px rgb(51 42 36 / 0.06);
+  --shadow-lift: 0 6px 18px rgb(51 42 36 / 0.12);
+  --shadow-tile: 0 3px 0 rgb(51 42 36 / 0.16), 0 4px 10px rgb(51 42 36 / 0.1);
+  --shadow-dialog: 0 16px 48px rgb(51 42 36 / 0.25);
+
+  --serif: 'Literata', Georgia, 'Times New Roman', serif;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--ground);
+  line-height: 1.45;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  margin: 0;
+  line-height: 1.2;
+}
+p {
+  margin: 0;
+}
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+a {
+  color: var(--accent);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary,
+.btn-ghost,
+.btn-dark,
+.btn-danger,
+.btn-quiet {
+  padding: 0.6rem 1.15rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  line-height: 1.1;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--paper);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+}
+.btn-primary:disabled {
+  background: #cdbfae;
+  cursor: default;
+}
+.btn-ghost {
+  background: var(--paper);
+  color: var(--ink-soft);
+  border-color: var(--line-strong);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--paper-low);
+}
+.btn-ghost:disabled {
+  color: #a8998a;
+  border-color: var(--line);
+  cursor: default;
+}
+.btn-dark {
+  background: var(--ink-soft);
+  color: var(--paper);
+}
+.btn-dark:hover {
+  background: var(--ink);
+}
+.btn-danger {
+  background: var(--bad);
+  color: var(--paper);
+}
+.btn-danger:hover {
+  background: #85281a;
+}
+.btn-quiet {
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem;
+}
+.btn-quiet:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--paper-low);
+}
+.big {
+  font-size: 1.05rem;
+  padding: 0.8rem 2rem;
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-rest);
+}
+
+.label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lede {
+  color: var(--muted);
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.field input,
+.field select,
+.field textarea,
+input.text {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--ink);
+  width: 100%;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+input.text:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+.field small {
+  font-weight: 400;
+  color: var(--muted);
+}
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--accent-wash);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+.pill.good {
+  background: var(--good-wash);
+  color: var(--good);
+}
+.pill.bad {
+  background: var(--bad-wash);
+  color: var(--bad);
+}
+.pill.muted {
+  background: var(--paper-low);
+  color: var(--muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+dialog {
+  width: min(36rem, calc(100% - 2rem));
+  padding: 1.5rem;
+  border: none;
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-dialog);
+}
+dialog::backdrop {
+  background: rgb(51 42 36 / 0.4);
+}
+
+@keyframes shake {
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
