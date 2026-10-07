@@ -70,7 +70,7 @@ Put `TURN_KEY_ID` / `TURN_KEY_API_TOKEN` in `.env.local` to test the relay local
 
 ## Deploying
 
-Published to `*.teacher.dev` on Vercel with the Sites scripts (`../sites`): `bun run create-site --path ../classroom-review-game --slug <slug>`. Pushing `main` redeploys.
+Live at **https://one-vs-100.teacher.dev**, on Vercel (project `one-vs-100`, repo `teacherdotdev/one-vs-100`), created with the Sites scripts (`../sites`): `bun run create-site --path ../classroom-review-game --slug one-vs-100`. Pushing `main` redeploys. The Vercel project has `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` set (the same Cloudflare TURN key as Happy Hallways).
 
 ## License
 
