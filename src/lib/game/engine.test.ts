@@ -34,7 +34,7 @@ function answerAll(engine: Engine, choices: Record<string, number>) {
   for (const [id, choice] of Object.entries(choices)) expect(engine.answer(id, active.id, choice).ok).toBe(true);
 }
 
-describe('1v100 engine', () => {
+describe('Class Gauntlet engine', () => {
   test('One right: wrong Mob members join the Comeback Crew and fund the bank', () => {
     const { engine, ids } = setup();
     const [one, ben, cy, dee] = ids;

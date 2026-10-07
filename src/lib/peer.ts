@@ -4,7 +4,7 @@ import type { DataConnection, Peer } from 'peerjs';
  * The teacher's tab registers `roomPrefix + CODE` on the matchmaking server;
  * students dial that address after typing the code from the board.
  */
-export const roomPrefix = 'review1v100-';
+export const roomPrefix = 'classgauntlet-';
 
 /**
  * teacher.dev's matchmaking server (a standard PeerJS server, shared with Happy

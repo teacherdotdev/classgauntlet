@@ -36,7 +36,7 @@
   }
 </script>
 
-<svelte:head><title>{view ? `${view.code} · Projector` : 'Projector'} · 1 vs 100 Classroom</title></svelte:head>
+<svelte:head><title>{view ? `${view.code} · Projector` : 'Projector'} · Class Gauntlet</title></svelte:head>
 
 {#if view}
   <main class="projector" ondblclick={fullscreen}>

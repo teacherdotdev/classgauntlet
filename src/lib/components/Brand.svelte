@@ -4,9 +4,9 @@
 </script>
 
 {#if href}
-  <a class="brand" {href}><Logo {size} /> <span>1 <i>vs</i> 100 <small>Classroom</small></span></a>
+  <a class="brand" {href}><Logo {size} /> <span>Class <i>Gauntlet</i></span></a>
 {:else}
-  <span class="brand"><Logo {size} /> <span>1 <i>vs</i> 100 <small>Classroom</small></span></span>
+  <span class="brand"><Logo {size} /> <span>Class <i>Gauntlet</i></span></span>
 {/if}
 
 <style>
@@ -21,11 +21,7 @@
     text-decoration: none;
   }
   i {
-    font-weight: 500;
-  }
-  small {
-    font-size: 0.85em;
-    color: var(--ink-soft);
     font-weight: 600;
+    color: var(--ink-soft);
   }
 </style>

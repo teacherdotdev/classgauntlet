@@ -12,7 +12,7 @@
   }
 </script>
 
-<svelte:head><title>1 vs 100 Classroom · A review game where nobody gets knocked out</title></svelte:head>
+<svelte:head><title>Class Gauntlet · A review game where nobody gets knocked out</title></svelte:head>
 
 <main class="page">
   <header class="top">

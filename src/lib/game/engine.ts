@@ -10,7 +10,7 @@ import {
 } from './types';
 
 /**
- * The rules of 1 vs 100, run by the teacher's tab. Every command checks that it
+ * The rules of Class Gauntlet, run by the teacher's tab. Every command checks that it
  * is allowed right now, changes the session in place, and returns ok or a
  * message a person can read. The host saves and broadcasts after each change.
  *

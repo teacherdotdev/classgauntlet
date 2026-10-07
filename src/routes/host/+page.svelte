@@ -14,7 +14,7 @@
   import { endHeadline, helpName, phaseName, plural, roleName } from '#lib/words.ts';
 
   // ── Setup ──────────────────────────────────────────────────────────────
-  const prefsKey = 'review1v100:prefs';
+  const prefsKey = 'classgauntlet:prefs';
   function loadPrefs(): Partial<Settings> & { setId?: string } {
     try {
       return JSON.parse(localStorage.getItem(prefsKey) ?? '{}');
@@ -107,7 +107,7 @@
   }
 
   function openProjector() {
-    window.open('/show', 'review1v100-projector', 'popup,width=1280,height=760');
+    window.open('/show', 'classgauntlet-projector', 'popup,width=1280,height=760');
   }
 
   function start() {
@@ -137,7 +137,7 @@
 
 <svelte:window onbeforeunload={beforeUnload} />
 
-<svelte:head><title>{s ? `${s.code} · Teacher` : 'Start a game'} · 1 vs 100 Classroom</title></svelte:head>
+<svelte:head><title>{s ? `${s.code} · Teacher` : 'Start a game'} · Class Gauntlet</title></svelte:head>
 
 {#if !s}
   <main class="page">

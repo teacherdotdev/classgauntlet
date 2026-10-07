@@ -78,7 +78,7 @@
   }
 </script>
 
-<svelte:head><title>Question sets · 1 vs 100 Classroom</title></svelte:head>
+<svelte:head><title>Question sets · Class Gauntlet</title></svelte:head>
 
 <main class="page">
   <header class="top">

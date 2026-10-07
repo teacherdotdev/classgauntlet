@@ -4,8 +4,7 @@
 
 <footer>
   <span class="note">
-    An independent classroom game inspired by a TV quiz show; not affiliated with its producers.
-    Based on <a href="https://github.com/deadbeef101010/1v100-edtechathon" target="_blank" rel="noopener noreferrer">1 vs 100 Classroom</a> (Apache 2.0).
+    Adapted from an <a href="https://github.com/deadbeef101010/1v100-edtechathon" target="_blank" rel="noopener noreferrer">open-source EdTech-a-thon project</a> (Apache 2.0).
   </span>
   <a class="built" href="https://teacher.dev" target="_blank" rel="noopener noreferrer">
     <img src={logo} alt="" width="18" height="18" />

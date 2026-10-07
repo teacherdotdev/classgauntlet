@@ -23,7 +23,7 @@ export type HostMessage =
 /** Between the teacher's tab and a projector window on the same computer. */
 export type ShowMessage = { type: 'hello' } | { type: 'view'; view: View; joinUrl: string } | { type: 'closed' };
 
-export const showChannelName = 'review1v100-show';
+export const showChannelName = 'classgauntlet-show';
 
 /** Six characters that are hard to misread on a projector: no 0/O, 1/I/L. */
 const codeAlphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';

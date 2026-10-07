@@ -19,7 +19,7 @@ import {
  * local storage after every change, so reloading the tab picks up where it was.
  */
 
-const savedKey = 'review1v100:host';
+const savedKey = 'classgauntlet:host';
 
 type Saved = { session: Session; kicked: string[] };
 

@@ -1,7 +1,7 @@
 import type { EndReason, Role, ScoreDelta, Settings } from './types';
 
 /**
- * The 1v100 scoring rules, ported unchanged from the original server
+ * The scoring rules, ported unchanged from the original open-source server
  * (src/engine/one-v-100-scoring.ts in deadbeef101010/1v100-edtechathon).
  */
 

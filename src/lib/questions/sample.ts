@@ -1,7 +1,7 @@
 import type { QuestionSet } from '../game/types';
 
 /**
- * The sample deck from the original 1 vs 100 Classroom project (Apache 2.0),
+ * The sample deck from the original open-source project (Apache 2.0),
  * so a teacher can try a game before writing their own questions.
  */
 const rows: [string, string[], number, string][] = [

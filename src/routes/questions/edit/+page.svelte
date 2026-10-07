@@ -67,8 +67,8 @@
   function play() {
     if (dirty && !save()) return;
     try {
-      const prefs = JSON.parse(localStorage.getItem('review1v100:prefs') ?? '{}');
-      localStorage.setItem('review1v100:prefs', JSON.stringify({ ...prefs, setId: draft.id }));
+      const prefs = JSON.parse(localStorage.getItem('classgauntlet:prefs') ?? '{}');
+      localStorage.setItem('classgauntlet:prefs', JSON.stringify({ ...prefs, setId: draft.id }));
     } catch {
       /* fine */
     }
@@ -101,7 +101,7 @@
 </script>
 
 <svelte:window onbeforeunload={(e) => dirty && e.preventDefault()} />
-<svelte:head><title>{draft.title || 'New question set'} · 1 vs 100 Classroom</title></svelte:head>
+<svelte:head><title>{draft.title || 'New question set'} · Class Gauntlet</title></svelte:head>
 
 <main class="page">
   <header class="top">

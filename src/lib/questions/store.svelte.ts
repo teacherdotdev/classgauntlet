@@ -7,7 +7,7 @@ import { sampleSet, sampleSetId } from './sample';
  * uploaded. Share links and CSV files move them between computers.
  */
 
-const key = 'review1v100:sets';
+const key = 'classgauntlet:sets';
 
 function load(): QuestionSet[] {
   try {

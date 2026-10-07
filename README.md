@@ -1,8 +1,8 @@
-# 1 vs 100 Classroom
+# Class Gauntlet
 
 **A classroom review game where one student takes on the rest of the class, and nobody gets knocked out.**
 
-A rebuild of [deadbeef101010/1v100-edtechathon](https://github.com/deadbeef101010/1v100-edtechathon) (built at EdTech-a-thon) that needs no server: instead of a Docker container with Node, Socket.IO and SQLite, the **teacher's browser tab runs the game** and every student's device connects straight to it over WebRTC, through teacher.dev's peer-to-peer matchmaking server. Teachers can also write their own question sets in the app.
+A serverless rebuild of an [open-source EdTech-a-thon project](https://github.com/deadbeef101010/1v100-edtechathon) that needs no server: instead of a Docker container with Node, Socket.IO and SQLite, the **teacher's browser tab runs the game** and every student's device connects straight to it over WebRTC, through teacher.dev's peer-to-peer matchmaking server. Teachers can also write their own question sets in the app.
 
 ## How a game works
 
@@ -48,7 +48,7 @@ student phones ──WebRTC data channels──▶ teacher's tab (runs the rules
 ```
 
 - `src/lib/game/` — the rules as plain TypeScript: `engine.ts` (commands and phases), `scoring.ts`, `views.ts` (what each screen may see: the correct answer never leaves the teacher's tab before the reveal).
-- `src/lib/host.svelte.ts` — the teacher's room: registers `review1v100-<CODE>` on the PeerJS server, accepts students, broadcasts views, and saves the whole game after every change. Reloading the tab offers to resume, reclaims the same code, and students reconnect on their own.
+- `src/lib/host.svelte.ts` — the teacher's room: registers `classgauntlet-<CODE>` on the PeerJS server, accepts students, broadcasts views, and saves the whole game after every change. Reloading the tab offers to resume, reclaims the same code, and students reconnect on their own.
 - `src/lib/student.svelte.ts` — a student's link. Its seat (player id + secret) is kept in local storage, so a reload or dropped Wi-Fi puts the student back in with their points.
 - `src/lib/peer.ts` — shared with Happy Hallways: picks `peer.teacher.dev` or `peer.happyhallways.com`, fetches TURN logins from `/api/turn`, reconnects with backoff, heartbeats.
 - `api/turn.ts` — a Vercel function that hands out short-lived Cloudflare TURN logins. Needs `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`.
@@ -70,8 +70,8 @@ Put `TURN_KEY_ID` / `TURN_KEY_API_TOKEN` in `.env.local` to test the relay local
 
 ## Deploying
 
-Live at **https://one-vs-100.teacher.dev**, on Vercel (project `one-vs-100`, repo `teacherdotdev/one-vs-100`), created with the Sites scripts (`../sites`): `bun run create-site --path ../classroom-review-game --slug one-vs-100`. Pushing `main` redeploys. The Vercel project has `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` set (the same Cloudflare TURN key as Happy Hallways).
+Live at **https://classgauntlet.teacher.dev**, on Vercel (project `classgauntlet`, repo `teacherdotdev/classgauntlet`), created with the Sites scripts (`../sites`): `bun run create-site --path ../classroom-review-game --slug classgauntlet`. Pushing `main` redeploys. The Vercel project has `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` set (the same Cloudflare TURN key as Happy Hallways).
 
 ## License
 
-Apache 2.0, like the original. This independent classroom project is inspired by a television quiz-show format and is not affiliated with or endorsed by the program's producers or rights holders.
+Apache 2.0, like the project it is adapted from: https://github.com/deadbeef101010/1v100-edtechathon (Copyright 2026 deadbeef101010 and contributors).

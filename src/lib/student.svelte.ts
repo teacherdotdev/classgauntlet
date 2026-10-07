@@ -14,7 +14,7 @@ import type { HostMessage, StudentMessage } from './protocol';
 
 type Seat = { playerId: string; secret: string; nickname: string };
 
-const seatKey = (code: string) => `review1v100:seat:${code}`;
+const seatKey = (code: string) => `classgauntlet:seat:${code}`;
 
 function loadSeat(code: string): Seat | null {
   try {

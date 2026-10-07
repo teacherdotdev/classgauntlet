@@ -8,7 +8,7 @@ import { randomId } from '../game/engine';
  *      question, A, B, C, D, answer, explanation
  *    D is optional. `answer` is a letter (A–D), or the text of the right answer.
  *
- * 2. The original 1 vs 100 Classroom format:
+ * 2. The original open-source project's format:
  *      set title, subject, grade, question, choices, correct, explanation
  *    `choices` is a JSON array and `correct` a zero-based index. A file with
  *    several set titles becomes several sets.

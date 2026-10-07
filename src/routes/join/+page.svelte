@@ -67,7 +67,7 @@
   const canAnswerOne = $derived(view?.phase === 'PHASE_B' && !view.paused && iAmOne);
 </script>
 
-<svelte:head><title>{view ? `${student.nickname} · ${view.code}` : 'Join a game'} · 1 vs 100 Classroom</title></svelte:head>
+<svelte:head><title>{view ? `${student.nickname} · ${view.code}` : 'Join a game'} · Class Gauntlet</title></svelte:head>
 
 <main class="app">
   <header class="bar">
