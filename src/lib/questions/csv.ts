@@ -147,14 +147,43 @@ function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-export function exportCsv(set: QuestionSet): string {
-  const header = ['question', 'A', 'B', 'C', 'D', 'answer', 'explanation'];
-  const lines = set.questions.map((q) =>
-    [q.prompt, q.choices[0] ?? '', q.choices[1] ?? '', q.choices[2] ?? '', q.choices[3] ?? '', String.fromCharCode(65 + q.correct), q.explanation ?? '']
-      .map(csvCell)
-      .join(','),
+/**
+ * One or more sets as a spreadsheet. The set title, subject and grade ride
+ * along on every row, so importing the file gives back the same sets.
+ */
+export function exportCsv(sets: QuestionSet | QuestionSet[]): string {
+  const header = ['set title', 'subject', 'grade', 'question', 'A', 'B', 'C', 'D', 'answer', 'explanation'];
+  const lines = [sets].flat().flatMap((set) =>
+    set.questions.map((q) =>
+      [
+        set.title,
+        set.subject ?? '',
+        set.grade ?? '',
+        q.prompt,
+        q.choices[0] ?? '',
+        q.choices[1] ?? '',
+        q.choices[2] ?? '',
+        q.choices[3] ?? '',
+        String.fromCharCode(65 + q.correct),
+        q.explanation ?? '',
+      ]
+        .map(csvCell)
+        .join(','),
+    ),
   );
   return [header.join(','), ...lines].join('\n') + '\n';
+}
+
+export function csvFileName(title: string): string {
+  return `${title.replace(/[^\w -]+/g, '').trim() || 'questions'}.csv`;
+}
+
+/** Saves text as a CSV file. The byte-order mark makes Excel read accents and symbols correctly. */
+export function downloadCsv(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export const templateCsv = [

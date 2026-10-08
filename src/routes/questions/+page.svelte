@@ -3,7 +3,7 @@
   import Brand from '#lib/components/Brand.svelte';
   import Footer from '#lib/components/Footer.svelte';
   import type { QuestionSet } from '#lib/game/types.ts';
-  import { exportCsv, importQuestions, templateCsv } from '#lib/questions/csv.ts';
+  import { csvFileName, downloadCsv, exportCsv, importQuestions, templateCsv } from '#lib/questions/csv.ts';
   import { sampleSetId } from '#lib/questions/sample.ts';
   import { readShared, shareLink } from '#lib/questions/share.ts';
   import { library } from '#lib/questions/store.svelte.ts';
@@ -53,11 +53,9 @@
     fileInput.value = '';
   }
 
-  function download(name: string, text: string) {
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
-    const a = Object.assign(document.createElement('a'), { href: url, download: name });
-    a.click();
-    URL.revokeObjectURL(url);
+  function exportAll() {
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`class-gauntlet-sets-${stamp}.csv`, exportCsv($state.snapshot(library.sorted) as QuestionSet[]));
   }
 
   async function copyShare(set: QuestionSet) {
@@ -89,12 +87,13 @@
   <div class="head">
     <div>
       <h1>Your question sets</h1>
-      <p class="lede">Write your own, import a spreadsheet, or share a set with a colleague by link. Sets are saved in this browser.</p>
+      <p class="lede">Write your own, import a spreadsheet, or share a set with a colleague by link. Sets are saved in this browser, so export them to keep a backup.</p>
     </div>
     <div class="row">
       <a class="btn-primary" href="/questions/edit?new=1">+ New set</a>
       <button class="btn-ghost" onclick={() => fileInput.click()}>Import CSV</button>
       <button class="btn-ghost" onclick={() => (pasteOpen = !pasteOpen)}>Paste from a spreadsheet</button>
+      <button class="btn-ghost" onclick={exportAll} disabled={!library.sets.length} title="Download every set as one CSV file, to back up or move to another computer">Export all</button>
       <input bind:this={fileInput} type="file" accept=".csv,.tsv,.txt,text/csv" hidden onchange={onFile} />
     </div>
   </div>
@@ -118,7 +117,7 @@
       <p>
         Copy cells from Google Sheets or Excel, including a header row: <strong>question, A, B, C, D, answer, explanation</strong>.
         D and explanation are optional; <em>answer</em> is the letter of the right choice.
-        <button class="link" onclick={() => download('question-template.csv', templateCsv)}>Download the template</button>
+        <button class="link" onclick={() => downloadCsv('question-template.csv', templateCsv)}>Download the template</button>
       </p>
       <textarea bind:value={pasted} rows="8" placeholder={'question\tA\tB\tC\tanswer\nWhat is 7 × 8?\t54\t56\t64\tB'}></textarea>
       <div class="row">
@@ -159,7 +158,7 @@
           {#if menuFor === set.id}
             <div class="menu" role="menu">
               <button role="menuitem" onclick={() => copyShare(set)}>Copy share link</button>
-              <button role="menuitem" onclick={() => { download(`${set.title.replace(/[^\w -]+/g, '')}.csv`, exportCsv(set)); menuFor = ''; }}>Download CSV</button>
+              <button role="menuitem" onclick={() => { downloadCsv(csvFileName(set.title), exportCsv($state.snapshot(set) as QuestionSet)); menuFor = ''; }}>Download CSV</button>
               <button role="menuitem" onclick={() => { const copy = library.duplicate(set.id); menuFor = ''; if (copy) goto(`/questions/edit?id=${copy.id}`); }}>Duplicate</button>
               <button role="menuitem" class="danger" onclick={() => remove(set)}>Delete</button>
             </div>

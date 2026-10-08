@@ -27,3 +27,17 @@ test('tab-separated paste, answer given as text, and row errors', () => {
   expect(sets[0].questions[0].correct).toBe(0);
   expect(errors.length).toBe(1);
 });
+
+test('exporting several sets keeps titles, subjects and grades on re-import', () => {
+  const [first] = importQuestions(templateCsv, 'Facts').sets;
+  const second = { ...first, id: 'b', title: 'Second, with comma', subject: 'Science', grade: '5' };
+  const { sets, errors } = importQuestions(exportCsv([first, second]));
+  expect(errors).toEqual([]);
+  expect(sets.map((s) => [s.title, s.subject, s.grade, s.questions.length])).toEqual([
+    ['Facts', undefined, undefined, 3],
+    ['Second, with comma', 'Science', '5', 3],
+  ]);
+  expect(sets[1].questions.map((q) => [q.choices, q.correct, q.explanation])).toEqual(
+    first.questions.map((q) => [q.choices, q.correct, q.explanation]),
+  );
+});

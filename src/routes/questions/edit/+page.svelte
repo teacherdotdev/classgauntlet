@@ -5,6 +5,7 @@
   import Footer from '#lib/components/Footer.svelte';
   import { randomId } from '#lib/game/engine.ts';
   import type { Question, QuestionSet } from '#lib/game/types.ts';
+  import { csvFileName, downloadCsv, exportCsv } from '#lib/questions/csv.ts';
   import { sampleSetId } from '#lib/questions/sample.ts';
   import { library } from '#lib/questions/store.svelte.ts';
   import { plural } from '#lib/words.ts';
@@ -173,6 +174,7 @@
 <div class="savebar">
   <span class="hint">{plural(draft.questions.length, 'question')}</span>
   <div class="row">
+    <button class="btn-quiet" onclick={() => downloadCsv(csvFileName(draft.title), exportCsv($state.snapshot(draft) as QuestionSet))}>Download CSV</button>
     <button class="btn-save" class:pending={dirty} onclick={save} disabled={!dirty && !!savedJson}>
       {justSaved ? 'Saved ✓' : dirty ? 'Save changes' : 'Saved'}
     </button>
