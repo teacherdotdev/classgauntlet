@@ -3,13 +3,15 @@
   import Brand from '#lib/components/Brand.svelte';
   import Footer from '#lib/components/Footer.svelte';
   import type { QuestionSet } from '#lib/game/types.ts';
-  import { csvFileName, downloadCsv, exportCsv, importQuestions, templateCsv } from '#lib/questions/csv.ts';
+  import { aiInstructions, csvFileName, downloadCsv, exportCsv, importQuestions, templateCsv } from '#lib/questions/csv.ts';
   import { sampleSetId } from '#lib/questions/sample.ts';
   import { readShared, shareLink } from '#lib/questions/share.ts';
   import { library } from '#lib/questions/store.svelte.ts';
   import { plural } from '#lib/words.ts';
 
   let importErrors = $state<string[]>([]);
+  let importNotes = $state<string[]>([]);
+  let aiCopied = $state(false);
   let importMessage = $state('');
   let pasteOpen = $state(false);
   let pasted = $state('');
@@ -32,9 +34,10 @@
   }
 
   function runImport(text: string, fallbackTitle: string) {
-    const { sets, errors } = importQuestions(text, fallbackTitle);
+    const { sets, errors, notes } = importQuestions(text, fallbackTitle);
     for (const set of sets) library.add(set);
     importErrors = errors;
+    importNotes = notes;
     const count = sets.reduce((t, set) => t + set.questions.length, 0);
     importMessage = sets.length
       ? `Added ${plural(count, 'question')} in ${plural(sets.length, 'set')}.${errors.length ? ' Some rows were skipped:' : ''}`
@@ -51,6 +54,16 @@
     }
     runImport(await file.text(), file.name.replace(/\.(csv|tsv|txt)$/i, ''));
     fileInput.value = '';
+  }
+
+  async function copyAiInstructions() {
+    try {
+      await navigator.clipboard.writeText(aiInstructions);
+      aiCopied = true;
+      setTimeout(() => (aiCopied = false), 1800);
+    } catch {
+      prompt('Copy these instructions:', aiInstructions);
+    }
   }
 
   function exportAll() {
@@ -116,9 +129,16 @@
     <section class="panel paste">
       <p>
         Copy cells from Google Sheets or Excel, including a header row: <strong>question, A, B, C, D, answer, explanation</strong>.
-        D and explanation are optional; <em>answer</em> is the letter of the right choice.
+        D and explanation are optional; <em>answer</em> is the letter of the right choice. Blooket spreadsheets work too.
         <button class="link" onclick={() => downloadCsv('question-template.csv', templateCsv)}>Download the template</button>
       </p>
+      <div class="ai">
+        <p>
+          <strong>Have a worksheet or PDF?</strong> Copy these instructions into an AI chat such as Claude along with the file,
+          then paste its reply here.
+        </p>
+        <button class="btn-ghost" onclick={copyAiInstructions}>{aiCopied ? 'Copied ✓' : 'Copy AI instructions'}</button>
+      </div>
       <textarea bind:value={pasted} rows="8" placeholder={'question\tA\tB\tC\tanswer\nWhat is 7 × 8?\t54\t56\t64\tB'}></textarea>
       <div class="row">
         <button class="btn-primary" disabled={!pasted.trim()} onclick={() => runImport(pasted, 'Pasted questions')}>Import</button>
@@ -127,13 +147,19 @@
     </section>
   {/if}
 
-  {#if importMessage || importErrors.length}
+  {#if importMessage || importErrors.length || importNotes.length}
     <section class="panel report" role="status">
       {#if importMessage}<p><strong>{importMessage}</strong></p>{/if}
       {#if importErrors.length}
         <ul>
           {#each importErrors.slice(0, 12) as error, i (i)}<li>{error}</li>{/each}
           {#if importErrors.length > 12}<li>…and {importErrors.length - 12} more.</li>{/if}
+        </ul>
+      {/if}
+      {#if importNotes.length}
+        <ul class="notes">
+          {#each importNotes.slice(0, 12) as note, i (i)}<li>{note}</li>{/each}
+          {#if importNotes.length > 12}<li>…and {importNotes.length - 12} more.</li>{/if}
         </ul>
       {/if}
     </section>
@@ -240,6 +266,23 @@
     padding-left: 1.2rem;
     color: var(--bad);
     margin-top: 0.4rem;
+  }
+  .report .notes {
+    color: var(--ink-soft);
+  }
+  .ai {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--accent-line);
+    border-radius: 10px;
+    background: var(--accent-wash);
+  }
+  .ai p {
+    flex: 1 1 18rem;
   }
   .grid {
     display: grid;

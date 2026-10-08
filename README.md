@@ -35,6 +35,9 @@ Question sets are saved in the teacher's browser (local storage). Ways to get qu
 - **Write them** in the editor (`/questions/edit`): 2–4 choices per question and an optional explanation shown after the reveal.
 - **Import a CSV** or **paste cells from Google Sheets/Excel** with a header row `question, A, B, C, D, answer, explanation` (D and explanation optional; `answer` is a letter or the answer's text).
 - The original project's CSV format (`set title, subject, grade, question, choices, correct, explanation`, with `choices` a JSON array) imports too, one set per title.
+- **Blooket** spreadsheet imports work as well (its template's `Question Text, Answer 1–4, Correct Answer(s)` columns); when several answers are marked right, the first is kept.
+- **Copy AI instructions** (in the paste panel) copies a prompt that tells an AI chat to turn a worksheet or PDF into CSV in the expected format, ready to paste back in.
+- **Export all** downloads every set as one CSV (with set title, subject and grade on each row) that imports back as the same sets.
 - **Share links**: the set is compressed into the part of the link after `#`, which never reaches any server. Opening the link offers to add the set.
 
 ## Architecture
